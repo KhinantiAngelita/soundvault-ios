@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { formatTime, formatFileSize } from '../utils/formatters';
 import AntigravityLogo from './AntigravityLogo';
 import { CENURA_FONT } from '../utils/theme';
@@ -676,28 +676,39 @@ export default function PlayerModal({
               {formatTime(currentPos)}
             </Text>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <View
+              style={[
+                styles.skipPillGroup,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
               <TouchableOpacity
+                style={styles.skipIconBtn}
                 onPress={() => {
                   hapticSelection();
                   onSeek && onSeek(Math.max(0, currentPos - 10000));
                 }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 6 }}
+                activeOpacity={0.65}
               >
-                <Text style={[styles.timeText, { color: theme.accent, fontWeight: '600' }]}>
-                  −10d
-                </Text>
+                <MaterialIcons name="replay-10" size={19} color={theme.textSecondary} />
               </TouchableOpacity>
+              <View
+                style={[styles.skipDivider, { backgroundColor: theme.border }]}
+              />
               <TouchableOpacity
+                style={styles.skipIconBtn}
                 onPress={() => {
                   hapticSelection();
                   onSeek && onSeek(Math.min(maxDuration, currentPos + 10000));
                 }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 8 }}
+                activeOpacity={0.65}
               >
-                <Text style={[styles.timeText, { color: theme.accent, fontWeight: '600' }]}>
-                  +10d
-                </Text>
+                <MaterialIcons name="forward-10" size={19} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -1092,8 +1103,26 @@ const styles = StyleSheet.create({
   timeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 8,
-    marginTop: -6,
+    marginTop: -2,
+  },
+  skipPillGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  skipIconBtn: {
+    paddingHorizontal: 11,
+    paddingVertical: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  skipDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 14,
   },
   timeText: {
     fontSize: 11.5,

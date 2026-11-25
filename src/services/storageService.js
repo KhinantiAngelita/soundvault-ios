@@ -98,11 +98,27 @@ export const saveLastPlayedPosition = async (positionMs) => {
   }
 };
 
+// Perbaiki path sandbox iOS yang berubah UUID-nya setiap kali app di-update/reinstall lewat Sideloadly
+const rebaseIosUri = (uri, marker, currentDir) => {
+  if (isWeb || !uri || typeof uri !== 'string') return uri;
+  const idx = uri.indexOf(marker);
+  if (idx !== -1) {
+    const rel = uri.slice(idx + marker.length);
+    if (rel) return `${currentDir}${rel}`;
+  }
+  return uri;
+};
+
 // Manajemen Custom Playlist
 export const getPlaylists = async () => {
   try {
     const json = await AsyncStorage.getItem(PLAYLISTS_KEY);
-    return json ? JSON.parse(json) : [];
+    if (!json) return [];
+    const parsed = JSON.parse(json);
+    return parsed.map((pl) => ({
+      ...pl,
+      coverUri: rebaseIosUri(pl.coverUri, '/Documents/covers/', COVERS_DIR),
+    }));
   } catch (e) {
     return [];
   }
@@ -233,13 +249,14 @@ export const getStoredSongs = async () => {
     const parsed = JSON.parse(json);
     return parsed.map((song) => ({
       ...song,
+      uri: rebaseIosUri(song.uri, '/Documents/songs/', SONGS_DIR),
       artist: song.artist || 'Unknown Artist',
       genre: song.genre || 'Pop',
       album: song.album || 'Single',
       year: song.year || '2026',
       lyrics: song.lyrics || '',
       notes: song.notes || '',
-      coverUri: song.coverUri || null,
+      coverUri: rebaseIosUri(song.coverUri || null, '/Documents/covers/', COVERS_DIR),
       playCount: Number(song.playCount) || 0,
       lastPlayedAt: song.lastPlayedAt || null,
     }));

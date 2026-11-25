@@ -15,7 +15,6 @@ import {
   AppState,
   useColorScheme,
 } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -47,7 +46,6 @@ import {
 } from './src/services/storageService';
 import * as Font from 'expo-font';
 import { audioPlayer } from './src/services/audioService';
-import { extractYouTubeVideoId } from './src/services/youtubeService';
 import { THEMES, CENURA_FONT } from './src/utils/theme';
 import { hapticLight, hapticMedium, hapticSelection, hapticSuccess } from './src/utils/haptics';
 import AntigravityLogo from './src/components/AntigravityLogo';
@@ -59,7 +57,6 @@ import SettingsModal from './src/components/SettingsModal';
 import SplashScreen from './src/components/SplashScreen';
 import BottomNavbar from './src/components/BottomNavbar';
 import PlaylistView from './src/components/PlaylistView';
-import YouTubeDownloadView from './src/components/YouTubeDownloadView';
 import SongPickerModal from './src/components/SongPickerModal';
 import AppDialog from './src/components/AppDialog';
 
@@ -99,11 +96,6 @@ export default function App() {
   const [isFavoritePickerVisible, setIsFavoritePickerVisible] = useState(false);
   const [playlistCreateSignal, setPlaylistCreateSignal] = useState(0);
   const [isAddMenuVisible, setIsAddMenuVisible] = useState(false);
-
-  // Auto-Deteksi Link YouTube dari Clipboard
-  const [detectedYtUrl, setDetectedYtUrl] = useState('');
-  const [pendingYtUrl, setPendingYtUrl] = useState('');
-  const dismissedYtUrlRef = useRef('');
 
   // Custom Design-System Dialog (menggantikan Alert.alert bawaan)
   const [dialogConfig, setDialogConfig] = useState(null);
@@ -205,23 +197,23 @@ export default function App() {
       }
     });
 
-    const checkClipboardForYouTube = async () => {
+    // Auto-Sync diam-diam saat kembali ke aplikasi (langsung deteksi MP3 baru di On My iPhone -> SoundVault -> songs)
+    const silentFolderSync = async () => {
       if (Platform.OS === 'web') return;
       try {
-        const text = await Clipboard.getStringAsync();
-        const clean = (text || '').trim();
-        if (clean && extractYouTubeVideoId(clean) && clean !== dismissedYtUrlRef.current) {
-          setDetectedYtUrl(clean);
+        const res = await syncSongsFromLocalFolder();
+        if (res.count > 0) {
+          setSongs(res.songs);
+          showToast(`${res.count} lagu baru masuk dari On My iPhone`);
         }
       } catch (e) {
-        // Abaikan jika izin clipboard belum diberikan
+        // Abaikan
       }
     };
 
-    checkClipboardForYouTube();
     const appStateSub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
-        checkClipboardForYouTube();
+        silentFolderSync();
       }
     });
 
@@ -353,9 +345,11 @@ export default function App() {
     }
   };
 
+  const displayedSongsRef = useRef([]);
+
   const handlePlaySong = async (song, index, customQueue = null) => {
     hapticLight();
-    const listToPlay = customQueue || displayedSongs;
+    const listToPlay = customQueue || displayedSongsRef.current;
     await audioPlayer.playSong(song, listToPlay, index);
   };
 
@@ -623,6 +617,7 @@ export default function App() {
     selectedGenre,
     sortOrder,
   ]);
+  displayedSongsRef.current = displayedSongs;
 
   const handleSelectTab = (tabKey) => {
     hapticSelection();
@@ -734,48 +729,6 @@ export default function App() {
             </View>
           </View>
 
-          {/* Banner Auto-Deteksi Link YouTube dari Clipboard */}
-          {!!detectedYtUrl && activeNav !== 'download' && (
-            <View
-              style={[
-                styles.clipBanner,
-                {
-                  backgroundColor: theme.accentSoft,
-                  borderColor: theme.accentBorder,
-                },
-              ]}
-            >
-              <Ionicons name="logo-youtube" size={18} color={theme.accent} />
-              <Text
-                style={[styles.clipBannerText, { color: theme.text }]}
-                numberOfLines={1}
-              >
-                Link YouTube terdeteksi di clipboard
-              </Text>
-              <TouchableOpacity
-                style={[styles.clipSaveBtn, { backgroundColor: theme.accentStrong }]}
-                onPress={() => {
-                  hapticSelection();
-                  dismissedYtUrlRef.current = detectedYtUrl;
-                  setPendingYtUrl(detectedYtUrl);
-                  setDetectedYtUrl('');
-                  setActiveNav('download');
-                }}
-              >
-                <Text style={styles.clipSaveBtnText}>Simpan</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  dismissedYtUrlRef.current = detectedYtUrl;
-                  setDetectedYtUrl('');
-                }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="close" size={16} color={theme.textSecondary} />
-              </TouchableOpacity>
-            </View>
-          )}
-
           {/* === TAB PLAYLIST (KARTU PLAYLIST ALA REFERENSI + BUAT LANGSUNG) === */}
           {activeNav === 'playlists' && (
             <PlaylistView
@@ -798,20 +751,6 @@ export default function App() {
               onCreatePlaylist={handleCreatePlaylist}
               onEditSong={(song, tabKey) => handleOpenEditor(song, tabKey)}
               onDeleteSong={handleDeleteSong}
-            />
-          )}
-
-          {/* === TAB UNDUH YOUTUBE KE MP3 === */}
-          {activeNav === 'download' && (
-            <YouTubeDownloadView
-              theme={theme}
-              songs={songs}
-              playerStatus={playerStatus}
-              initialUrl={pendingYtUrl}
-              onConsumeInitialUrl={() => setPendingYtUrl('')}
-              onShowDialog={showDialog}
-              onSongDownloaded={(updatedSongs) => setSongs(updatedSongs)}
-              onPlaySong={handlePlaySong}
             />
           )}
 
@@ -1108,7 +1047,7 @@ export default function App() {
                   ? 'Ketuk tombol "+" di kanan atas lalu pilih "Tambah Favorit", atau geser kiri pada lagu.'
                   : searchQuery
                   ? `Tidak ada lagu yang cocok dengan "${searchQuery}".`
-                  : 'Ketuk tombol "+" di kanan atas untuk impor lagu, atau buka tab Simpan untuk YouTube.'}
+                  : 'Ketuk tombol "+" di kanan atas untuk mengimpor lagu dari perangkat Anda.'}
               </Text>
             </View>
           ) : (
@@ -1162,6 +1101,7 @@ export default function App() {
               renderItem={({ item, index }) => (
                 <SongItem
                   song={item}
+                  index={index}
                   theme={theme}
                   isPlaying={playerStatus.isPlaying}
                   isCurrentSong={playerStatus.currentSong?.id === item.id}
@@ -1169,14 +1109,14 @@ export default function App() {
                   isSelectionMode={isSelectionMode}
                   isSelected={selectedSongIds.includes(item.id)}
                   playlists={playlists}
-                  onPress={() => handlePlaySong(item, index)}
+                  onPress={handlePlaySong}
                   onLongPress={handleEnterSelectionMode}
                   onToggleSelect={handleToggleSelectSong}
                   onPlayNext={handlePlayNext}
                   onToggleFavorite={handleToggleFavorite}
                   onToggleSongInPlaylist={handleToggleSongInPlaylist}
                   onCreatePlaylist={handleCreatePlaylist}
-                  onEdit={(song, tabKey) => handleOpenEditor(song, tabKey)}
+                  onEdit={handleOpenEditor}
                   onDelete={handleDeleteSong}
                 />
               )}

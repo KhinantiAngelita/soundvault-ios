@@ -23,12 +23,6 @@ const NAV_ITEMS = [
     icon: 'heart-outline',
     activeIcon: 'heart',
   },
-  {
-    key: 'download',
-    label: 'Simpan',
-    icon: 'arrow-down-circle-outline',
-    activeIcon: 'arrow-down-circle',
-  },
 ];
 
 function BottomNavbar({ activeNav, onSelectNav, theme }) {

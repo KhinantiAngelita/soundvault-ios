@@ -19,6 +19,7 @@ const SWIPE_ACTIONS_WIDTH = 186;
 
 function SongItem({
   song,
+  index = 0,
   theme,
   isPlaying,
   isCurrentSong,
@@ -51,8 +52,8 @@ function SongItem({
     isSwipedOpenRef.current = false;
     Animated.spring(translateX, {
       toValue: 0,
-      friction: 8,
-      tension: 85,
+      friction: 10,
+      tension: 120,
       useNativeDriver: true,
     }).start();
   };
@@ -62,8 +63,8 @@ function SongItem({
     hapticSelection();
     Animated.spring(translateX, {
       toValue: -SWIPE_ACTIONS_WIDTH,
-      friction: 8,
-      tension: 85,
+      friction: 10,
+      tension: 120,
       useNativeDriver: true,
     }).start();
   };
@@ -76,19 +77,28 @@ function SongItem({
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) =>
-        !selectionModeRef.current &&
-        Math.abs(g.dx) > 14 &&
-        Math.abs(g.dx) > Math.abs(g.dy) * 1.6,
+      onMoveShouldSetPanResponderCapture: (_, g) => {
+        if (selectionModeRef.current) return false;
+        const isHorizontal = Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy) * 1.15;
+        if (!isHorizontal) return false;
+        return g.dx < -6 || (isSwipedOpenRef.current && g.dx > 6);
+      },
+      onMoveShouldSetPanResponder: (_, g) => {
+        if (selectionModeRef.current) return false;
+        const isHorizontal = Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy) * 1.15;
+        if (!isHorizontal) return false;
+        return g.dx < -6 || (isSwipedOpenRef.current && g.dx > 6);
+      },
+      onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_, g) => {
         const base = isSwipedOpenRef.current ? -SWIPE_ACTIONS_WIDTH : 0;
-        const next = Math.min(0, Math.max(-SWIPE_ACTIONS_WIDTH - 14, base + g.dx));
+        const next = Math.min(0, Math.max(-SWIPE_ACTIONS_WIDTH - 12, base + g.dx));
         translateX.setValue(next);
       },
       onPanResponderRelease: (_, g) => {
         const base = isSwipedOpenRef.current ? -SWIPE_ACTIONS_WIDTH : 0;
         const finalX = base + g.dx;
-        if (finalX < -SWIPE_ACTIONS_WIDTH * 0.42 || g.vx < -0.45) {
+        if (finalX < -SWIPE_ACTIONS_WIDTH * 0.28 || g.vx < -0.25) {
           openSwipe();
         } else {
           closeSwipe();
@@ -193,7 +203,7 @@ function SongItem({
               if (isSelectionMode) {
                 onToggleSelect && onToggleSelect(song.id);
               } else {
-                onPress && onPress();
+                onPress && onPress(song, index);
               }
             }}
             onLongPress={
@@ -833,4 +843,15 @@ const styles = StyleSheet.create({
   },
 });
 
-export default memo(SongItem);
+export default memo(SongItem, (prev, next) => {
+  if (prev.song !== next.song) return false;
+  if (prev.index !== next.index) return false;
+  if (prev.theme.mode !== next.theme.mode) return false;
+  if (prev.isSelectionMode !== next.isSelectionMode) return false;
+  if (prev.isSelected !== next.isSelected) return false;
+  if (prev.isFavorite !== next.isFavorite) return false;
+  if (prev.isCurrentSong !== next.isCurrentSong) return false;
+  if (next.isCurrentSong && prev.isPlaying !== next.isPlaying) return false;
+  if (prev.playlists !== next.playlists) return false;
+  return true;
+});

@@ -275,12 +275,13 @@ export default function PlaylistView({
           renderItem={({ item, index }) => (
             <SongItem
               song={item}
+              index={index}
               theme={theme}
               isPlaying={playerStatus.isPlaying}
               isCurrentSong={playerStatus.currentSong?.id === item.id}
               isFavorite={favorites.includes(item.id)}
               playlists={playlists}
-              onPress={() => onPlaySong(item, index, plSongs)}
+              onPress={(track, idx) => onPlaySong(track, idx, plSongs)}
               onPlayNext={onPlayNext}
               onRemoveFromPlaylist={(songId) =>
                 onToggleSongInPlaylist && onToggleSongInPlaylist(activePlaylist.id, songId)
