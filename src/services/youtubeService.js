@@ -1,6 +1,10 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import { ensureDirectoryExists, addDownloadedSong } from './storageService';
+import {
+  ensureDirectoryExists,
+  addDownloadedSong,
+  getStoredSongs,
+} from './storageService';
 
 const isWeb = Platform.OS === 'web';
 const SONGS_DIR = isWeb ? '' : `${FileSystem.documentDirectory}songs/`;
@@ -272,6 +276,22 @@ const resolveAudioStreamUrl = async (videoId, canonicalUrl, onStatus) => {
 
 export const downloadYouTubeToSoundVault = async (rawUrl, previewMeta = null, onStatus = null) => {
   const meta = previewMeta || (await fetchYouTubePreview(rawUrl));
+
+  // Cegah duplikat: periksa apakah link YouTube ini sudah pernah disimpan
+  try {
+    const existing = await getStoredSongs();
+    const dup = existing.find(
+      (s) => s.notes && s.notes.includes(`v=${meta.videoId}`)
+    );
+    if (dup) {
+      throw new Error(`Lagu "${dup.title}" sudah tersimpan di pustaka SoundVault kamu.`);
+    }
+  } catch (e) {
+    if (e.message && e.message.includes('sudah tersimpan')) {
+      throw e;
+    }
+  }
+
   const stream = await resolveAudioStreamUrl(meta.videoId, meta.canonicalUrl, onStatus);
 
   if (!stream || !stream.url) {

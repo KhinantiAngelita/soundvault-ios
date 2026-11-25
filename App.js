@@ -61,6 +61,7 @@ import BottomNavbar from './src/components/BottomNavbar';
 import PlaylistView from './src/components/PlaylistView';
 import YouTubeDownloadView from './src/components/YouTubeDownloadView';
 import SongPickerModal from './src/components/SongPickerModal';
+import AppDialog from './src/components/AppDialog';
 
 export default function App() {
   const systemColorScheme = useColorScheme();
@@ -84,6 +85,7 @@ export default function App() {
   const [selectedPlaylistId, setSelectedPlaylistId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [fontsLoaded, setFontsLoaded] = useState(false);
@@ -95,11 +97,39 @@ export default function App() {
   const [isBatchPlaylistModalVisible, setIsBatchPlaylistModalVisible] = useState(false);
   const [batchNewPlaylistName, setBatchNewPlaylistName] = useState('');
   const [isFavoritePickerVisible, setIsFavoritePickerVisible] = useState(false);
+  const [playlistCreateSignal, setPlaylistCreateSignal] = useState(0);
+  const [isAddMenuVisible, setIsAddMenuVisible] = useState(false);
 
   // Auto-Deteksi Link YouTube dari Clipboard
   const [detectedYtUrl, setDetectedYtUrl] = useState('');
   const [pendingYtUrl, setPendingYtUrl] = useState('');
   const dismissedYtUrlRef = useRef('');
+
+  // Custom Design-System Dialog (menggantikan Alert.alert bawaan)
+  const [dialogConfig, setDialogConfig] = useState(null);
+  const showDialog = (cfg) => {
+    setDialogConfig({
+      title: cfg.title || '',
+      message: cfg.message || '',
+      type: cfg.type || 'info',
+      confirmText: cfg.confirmText || 'OK',
+      cancelText: cfg.cancelText || null,
+      onConfirm: cfg.onConfirm || null,
+    });
+  };
+  const closeDialog = () => setDialogConfig(null);
+
+  // Subtle iOS Toast Pill
+  const [toastMessage, setToastMessage] = useState('');
+  const toastTimerRef = useRef(null);
+  const showToast = (msg) => {
+    if (!msg) return;
+    setToastMessage(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage('');
+    }, 1800);
+  };
 
   // Player State
   const [playerStatus, setPlayerStatus] = useState({
@@ -249,23 +279,51 @@ export default function App() {
 
   const handleSyncLocalFolder = async () => {
     hapticSelection();
+    setIsSettingsVisible(false);
     try {
       const res = await syncSongsFromLocalFolder();
       setSongs(res.songs);
       if (res.count > 0) {
         hapticSuccess();
-        Alert.alert(
-          'Sinkronisasi Berhasil',
-          `${res.count} lagu baru dari folder On My iPhone berhasil ditambahkan.`
-        );
+        setTimeout(() => {
+          showDialog({
+            title: 'Sinkronisasi Berhasil',
+            message: `${res.count} lagu baru dari folder On My iPhone berhasil ditambahkan.`,
+            type: 'success',
+          });
+        }, 280);
       } else {
-        Alert.alert(
-          'Sudah Terbaru',
-          'Tidak ada file lagu baru yang ditemukan di folder SoundVault.'
-        );
+        setTimeout(() => {
+          showDialog({
+            title: 'Sudah Terbaru',
+            message: 'Tidak ada file lagu baru yang ditemukan di folder SoundVault.',
+            type: 'info',
+          });
+        }, 280);
       }
     } catch (e) {
-      Alert.alert('Gagal Sinkronisasi', e.message || 'Terjadi kesalahan saat memindai folder.');
+      setTimeout(() => {
+        showDialog({
+          title: 'Gagal Sinkronisasi',
+          message: e.message || 'Terjadi kesalahan saat memindai folder.',
+          type: 'danger',
+        });
+      }, 280);
+    }
+  };
+
+  const handlePullToRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await syncSongsFromLocalFolder();
+      setSongs(res.songs);
+      if (res.count > 0) {
+        hapticSuccess();
+      }
+    } catch (e) {
+      // Abaikan error ringan saat pull refresh
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -276,14 +334,20 @@ export default function App() {
       if (result.success) {
         hapticSuccess();
         setSongs(result.songs);
-        if (Platform.OS !== 'web') {
-          Alert.alert('Tersimpan', `${result.count} lagu ditambahkan ke penyimpanan.`);
-        }
+        showToast(`${result.count} lagu berhasil ditambahkan`);
       } else if (result.error) {
-        Alert.alert('Gagal Mengimpor', result.error);
+        showDialog({
+          title: 'Gagal Mengimpor',
+          message: result.error,
+          type: 'danger',
+        });
       }
     } catch (err) {
-      Alert.alert('Error', err.message);
+      showDialog({
+        title: 'Terjadi Kesalahan',
+        message: err.message || 'Gagal mengimpor lagu.',
+        type: 'danger',
+      });
     } finally {
       setIsImporting(false);
     }
@@ -298,12 +362,15 @@ export default function App() {
   const handlePlayNext = async (song) => {
     hapticSuccess();
     await audioPlayer.playNext(song);
+    showToast(`"${song.title}" diputar berikutnya`);
   };
 
   const handleToggleFavorite = async (songId) => {
     hapticLight();
+    const wasFav = favorites.includes(songId);
     const updated = await toggleFavoriteSong(songId);
     setFavorites(updated);
+    showToast(wasFav ? 'Dihapus dari Favorit' : 'Ditambahkan ke Favorit');
   };
 
   const handleCreatePlaylist = async (name, initialSongId = null) => {
@@ -379,18 +446,22 @@ export default function App() {
   const handleBatchAddToFavorites = async () => {
     if (selectedSongIds.length === 0) return;
     hapticSuccess();
+    const count = selectedSongIds.length;
     const updated = await addSongsToFavorites(selectedSongIds);
     setFavorites(updated);
     handleExitSelectionMode();
+    showToast(`${count} lagu ditambahkan ke Favorit`);
   };
 
   const handleBatchAddToPlaylist = async (playlistId) => {
     if (selectedSongIds.length === 0) return;
     hapticSuccess();
+    const count = selectedSongIds.length;
     const updated = await addSongsToPlaylist(playlistId, selectedSongIds);
     setPlaylists(updated);
     setIsBatchPlaylistModalVisible(false);
     handleExitSelectionMode();
+    showToast(`${count} lagu ditambahkan ke Playlist`);
   };
 
   const handleBatchCreateAndAddToPlaylist = async () => {
@@ -405,24 +476,21 @@ export default function App() {
 
   const handleBatchDeleteSongs = async () => {
     if (selectedSongIds.length === 0) return;
-    const doDelete = async () => {
-      for (const id of selectedSongIds) {
-        await handleDeleteSong(id);
-      }
-      handleExitSelectionMode();
-    };
-    if (Platform.OS === 'web') {
-      await doDelete();
-      return;
-    }
-    Alert.alert(
-      `Hapus ${selectedSongIds.length} Lagu?`,
-      'Lagu yang dipilih akan dihapus permanen dari penyimpanan SoundVault.',
-      [
-        { text: 'Batal', style: 'cancel' },
-        { text: 'Hapus', style: 'destructive', onPress: doDelete },
-      ]
-    );
+    const count = selectedSongIds.length;
+    showDialog({
+      title: `Hapus ${count} Lagu?`,
+      message: 'Lagu yang dipilih akan dihapus permanen dari penyimpanan SoundVault.',
+      type: 'danger',
+      confirmText: 'Hapus',
+      cancelText: 'Batal',
+      onConfirm: async () => {
+        for (const id of selectedSongIds) {
+          await handleDeleteSong(id);
+        }
+        handleExitSelectionMode();
+        showToast(`${count} lagu dihapus`);
+      },
+    });
   };
 
   const handleDeleteSong = async (songId) => {
@@ -444,7 +512,11 @@ export default function App() {
         audioPlayer.removeSongFromQueue(songId);
       }
     } catch (err) {
-      Alert.alert('Error', 'Gagal menghapus lagu.');
+      showDialog({
+        title: 'Gagal Menghapus',
+        message: 'Tidak dapat menghapus lagu dari penyimpanan.',
+        type: 'danger',
+      });
     }
   };
 
@@ -453,8 +525,13 @@ export default function App() {
       const updated = await updateSongMetadata(songId, updates);
       setSongs(updated);
       audioPlayer.updateSongInMemory(songId, updates);
+      showToast('Perubahan lagu disimpan');
     } catch (err) {
-      Alert.alert('Error', 'Gagal menyimpan perubahan info lagu.');
+      showDialog({
+        title: 'Gagal Menyimpan',
+        message: 'Tidak dapat menyimpan perubahan info lagu.',
+        type: 'danger',
+      });
     }
   };
 
@@ -623,7 +700,10 @@ export default function App() {
                     shadowColor: theme.accentStrong,
                   },
                 ]}
-                onPress={handleImportSongs}
+                onPress={() => {
+                  hapticSelection();
+                  setIsAddMenuVisible(true);
+                }}
                 disabled={isImporting}
                 activeOpacity={0.85}
               >
@@ -704,6 +784,8 @@ export default function App() {
               favorites={favorites}
               theme={theme}
               playerStatus={playerStatus}
+              createTriggerSignal={playlistCreateSignal}
+              onShowDialog={showDialog}
               onCreatePlaylistWithSongs={handleCreatePlaylistWithSongs}
               onSetPlaylistSongs={handleSetPlaylistSongs}
               onUpdatePlaylistInfo={handleUpdatePlaylistInfo}
@@ -727,6 +809,7 @@ export default function App() {
               playerStatus={playerStatus}
               initialUrl={pendingYtUrl}
               onConsumeInitialUrl={() => setPendingYtUrl('')}
+              onShowDialog={showDialog}
               onSongDownloaded={(updatedSongs) => setSongs(updatedSongs)}
               onPlaySong={handlePlaySong}
             />
@@ -735,7 +818,7 @@ export default function App() {
           {/* === TAB PUSTAKA & TAB FAVORIT === */}
           {(activeNav === 'library' || activeNav === 'favorites') && (
             <View style={{ flex: 1 }}>
-              {/* Header Khusus Tab Favorit dengan Tombol Pilih Banyak Lagu */}
+              {/* Header Khusus Tab Favorit (Bersih tanpa tombol biru dobel; aksi tambah lewat + di header) */}
               {activeNav === 'favorites' && (
                 <View style={styles.favTabHeader}>
                   <View>
@@ -746,18 +829,6 @@ export default function App() {
                       {displayedSongs.length} lagu disukai
                     </Text>
                   </View>
-
-                  <TouchableOpacity
-                    style={[styles.favPickBtn, { backgroundColor: theme.accentStrong }]}
-                    onPress={() => {
-                      hapticSelection();
-                      setIsFavoritePickerVisible(true);
-                    }}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="checkmark-done-outline" size={16} color="#FFFFFF" />
-                    <Text style={styles.favPickBtnText}>Pilih Lagu</Text>
-                  </TouchableOpacity>
                 </View>
               )}
 
@@ -1034,7 +1105,7 @@ export default function App() {
               </Text>
               <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
                 {activeNav === 'favorites'
-                  ? 'Ketuk tombol "Pilih Lagu" di atas untuk menambahkan banyak lagu ke Favorit.'
+                  ? 'Ketuk tombol "+" di kanan atas lalu pilih "Tambah Favorit", atau geser kiri pada lagu.'
                   : searchQuery
                   ? `Tidak ada lagu yang cocok dengan "${searchQuery}".`
                   : 'Ketuk tombol "+" di kanan atas untuk impor lagu, atau buka tab Simpan untuk YouTube.'}
@@ -1044,6 +1115,11 @@ export default function App() {
             <FlatList
               data={displayedSongs}
               keyExtractor={(item) => item.id}
+              refreshing={isRefreshing}
+              onRefresh={activeNav === 'library' ? handlePullToRefresh : undefined}
+              initialNumToRender={12}
+              maxToRenderPerBatch={10}
+              windowSize={7}
               contentContainerStyle={[
                 styles.listContent,
                 playerStatus.currentSong || isSelectionMode
@@ -1206,6 +1282,31 @@ export default function App() {
             />
           )}
 
+          {/* Subtle Floating Toast Pill */}
+          {!!toastMessage && (
+            <View pointerEvents="none" style={styles.toastWrap}>
+              <View
+                style={[
+                  styles.toastPill,
+                  {
+                    backgroundColor:
+                      theme.mode === 'light' ? '#0F172A' : '#F8FAFC',
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.toastText,
+                    { color: theme.mode === 'light' ? '#FFFFFF' : '#0F172A' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {toastMessage}
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Bottom Navigation Bar */}
           <BottomNavbar
             activeNav={activeNav}
@@ -1303,6 +1404,84 @@ export default function App() {
             </Modal>
           )}
 
+          {/* Dropdown Menu Tombol "+" di Header (Impor Lagu | Buat Playlist | Tambah Favorit) */}
+          {isAddMenuVisible && (
+            <Modal
+              visible={isAddMenuVisible}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setIsAddMenuVisible(false)}
+            >
+              <TouchableOpacity
+                style={styles.addMenuBackdrop}
+                activeOpacity={1}
+                onPress={() => setIsAddMenuVisible(false)}
+              >
+                <View
+                  style={[
+                    styles.addDropdownCard,
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.border,
+                      shadowColor: theme.mode === 'light' ? '#0F172A' : '#000000',
+                    },
+                  ]}
+                >
+                  {[
+                    {
+                      label: 'Impor Lagu',
+                      icon: 'musical-note-outline',
+                      onPress: () => {
+                        setIsAddMenuVisible(false);
+                        setTimeout(() => handleImportSongs(), 260);
+                      },
+                    },
+                    {
+                      label: 'Buat Playlist',
+                      icon: 'albums-outline',
+                      onPress: () => {
+                        setIsAddMenuVisible(false);
+                        setActiveNav('playlists');
+                        setTimeout(() => setPlaylistCreateSignal((n) => n + 1), 260);
+                      },
+                    },
+                    {
+                      label: 'Tambah Favorit',
+                      icon: 'heart-outline',
+                      onPress: () => {
+                        setIsAddMenuVisible(false);
+                        setTimeout(() => setIsFavoritePickerVisible(true), 260);
+                      },
+                    },
+                  ].map((item, idx, arr) => (
+                    <TouchableOpacity
+                      key={item.label}
+                      style={[
+                        styles.addDropdownRow,
+                        idx < arr.length - 1 && {
+                          borderBottomWidth: StyleSheet.hairlineWidth,
+                          borderBottomColor: theme.border,
+                        },
+                      ]}
+                      onPress={item.onPress}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={item.icon}
+                        size={18}
+                        color={theme.accent}
+                        style={{ marginRight: 11 }}
+                      />
+                      <Text style={[styles.addDropdownText, { color: theme.text }]}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </TouchableOpacity>
+            </Modal>
+          )}
+
           {/* Modal Multi-Select Lagu untuk Tab Favorit */}
           {isFavoritePickerVisible && (
             <SongPickerModal
@@ -1367,6 +1546,25 @@ export default function App() {
               theme={theme}
               onClose={() => setSongToEdit(null)}
               onSave={handleSaveMetadata}
+            />
+          )}
+
+          {/* Custom Design-System Dialog Pop-up */}
+          {!!dialogConfig && (
+            <AppDialog
+              visible={!!dialogConfig}
+              title={dialogConfig.title}
+              message={dialogConfig.message}
+              type={dialogConfig.type}
+              confirmText={dialogConfig.confirmText}
+              cancelText={dialogConfig.cancelText}
+              theme={theme}
+              onCancel={closeDialog}
+              onConfirm={() => {
+                const cb = dialogConfig.onConfirm;
+                closeDialog();
+                if (cb) cb();
+              }}
             />
           )}
 
@@ -1753,6 +1951,57 @@ const styles = StyleSheet.create({
     fontFamily: CENURA_FONT,
     color: '#FFFFFF',
     fontSize: 12,
+    fontWeight: '600',
+  },
+  addMenuBackdrop: {
+    flex: 1,
+    alignItems: 'flex-end',
+    paddingTop: Platform.OS === 'ios' ? 104 : 62,
+    paddingRight: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.14)',
+  },
+  addDropdownCard: {
+    width: 210,
+    borderRadius: 15,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.14,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  addDropdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 13,
+    paddingHorizontal: 15,
+  },
+  addDropdownText: {
+    fontFamily: CENURA_FONT,
+    fontSize: 14.5,
+    fontWeight: '500',
+  },
+  toastWrap: {
+    position: 'absolute',
+    top: 66,
+    left: 24,
+    right: 24,
+    alignItems: 'center',
+    zIndex: 50,
+  },
+  toastPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  toastText: {
+    fontFamily: CENURA_FONT,
+    fontSize: 12.5,
     fontWeight: '600',
   },
 });

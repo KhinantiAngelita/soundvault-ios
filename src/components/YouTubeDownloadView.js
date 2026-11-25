@@ -31,6 +31,7 @@ export default function YouTubeDownloadView({
   playerStatus,
   initialUrl = '',
   onConsumeInitialUrl,
+  onShowDialog,
   onSongDownloaded,
   onPlaySong,
 }) {
@@ -108,10 +109,12 @@ export default function YouTubeDownloadView({
       setUrlInput('');
       setPreview(null);
       setStatusText('');
-      Alert.alert(
-        'Lagu Tersimpan',
-        `"${result.song.title}" sudah tersimpan offline di SoundVault.`
-      );
+      onShowDialog &&
+        onShowDialog({
+          title: 'Lagu Tersimpan',
+          message: `"${result.song.title}" sudah tersimpan offline di SoundVault.`,
+          type: 'success',
+        });
     } catch (err) {
       setErrorMsg(err.message || 'Gagal mengunduh audio YouTube.');
       setStatusText('');

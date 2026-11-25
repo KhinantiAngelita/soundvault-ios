@@ -1,5 +1,5 @@
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
-import { saveLastPlayedPosition } from './storageService';
+import { saveLastPlayedPosition, updateSongMetadata } from './storageService';
 
 class AudioService {
   constructor() {
@@ -100,15 +100,24 @@ class AudioService {
   updateLockScreenAndMediaSession(song) {
     if (!song) return;
 
-    // Native iOS Lock Screen & Control Center Now Playing Info
+    // Native iOS Lock Screen & Control Center Now Playing Info (+ tombol ±10d)
     try {
       if (this.player && typeof this.player.setActiveForLockScreen === 'function') {
-        this.player.setActiveForLockScreen(true, {
-          title: song.title || 'SoundVault',
-          artist: song.artist || 'Unknown Artist',
-          albumTitle: song.album || 'SoundVault',
-          artworkUrl: song.coverUri || undefined,
-        });
+        this.player.setActiveForLockScreen(
+          true,
+          {
+            title: song.title || 'SoundVault',
+            artist: song.artist || 'Unknown Artist',
+            albumTitle: song.album || 'SoundVault',
+            artworkUrl: song.coverUri || undefined,
+          },
+          {
+            showSeekForward: true,
+            showSeekBackward: true,
+            seekForwardIntervalSeconds: 10,
+            seekBackwardIntervalSeconds: 10,
+          }
+        );
       }
     } catch (e) {
       // Abaikan di platform web jika tidak didukung
@@ -251,7 +260,13 @@ class AudioService {
     const prevIsPlaying = this.isPlaying;
     this.position = Math.max(0, (status.currentTime || 0) * 1000);
     if (status.duration && status.duration > 0) {
-      this.duration = status.duration * 1000;
+      const durMs = status.duration * 1000;
+      this.duration = durMs;
+      // Simpan durasi asli ke metadata lokal jika sebelumnya masih 0
+      if (this.currentSong && !this.currentSong.duration && durMs > 1000) {
+        this.currentSong = { ...this.currentSong, duration: durMs };
+        updateSongMetadata(this.currentSong.id, { duration: durMs }).catch(() => {});
+      }
     }
     this.isPlaying = Boolean(status.playing);
     this.isBuffering = Boolean(status.isBuffering);

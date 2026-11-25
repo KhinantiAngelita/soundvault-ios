@@ -1,4 +1,4 @@
-import React, { useState, memo } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,15 @@ import {
   TouchableOpacity,
   Modal,
   Image,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CENURA_FONT } from '../utils/theme';
+import { hapticLight, hapticSelection } from '../utils/haptics';
+import AppDialog from './AppDialog';
+
+const SWIPE_ACTIONS_WIDTH = 186;
 
 function SongItem({
   song,
@@ -24,6 +30,7 @@ function SongItem({
   onLongPress,
   onToggleSelect,
   onPlayNext,
+  onRemoveFromPlaylist,
   onToggleFavorite,
   onToggleSongInPlaylist,
   onCreatePlaylist,
@@ -34,6 +41,65 @@ function SongItem({
   const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
+
+  const translateX = useRef(new Animated.Value(0)).current;
+  const isSwipedOpenRef = useRef(false);
+  const selectionModeRef = useRef(isSelectionMode);
+  selectionModeRef.current = isSelectionMode;
+
+  const closeSwipe = () => {
+    isSwipedOpenRef.current = false;
+    Animated.spring(translateX, {
+      toValue: 0,
+      friction: 8,
+      tension: 85,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const openSwipe = () => {
+    isSwipedOpenRef.current = true;
+    hapticSelection();
+    Animated.spring(translateX, {
+      toValue: -SWIPE_ACTIONS_WIDTH,
+      friction: 8,
+      tension: 85,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  useEffect(() => {
+    if (isSelectionMode && isSwipedOpenRef.current) {
+      closeSwipe();
+    }
+  }, [isSelectionMode]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        !selectionModeRef.current &&
+        Math.abs(g.dx) > 14 &&
+        Math.abs(g.dx) > Math.abs(g.dy) * 1.6,
+      onPanResponderMove: (_, g) => {
+        const base = isSwipedOpenRef.current ? -SWIPE_ACTIONS_WIDTH : 0;
+        const next = Math.min(0, Math.max(-SWIPE_ACTIONS_WIDTH - 14, base + g.dx));
+        translateX.setValue(next);
+      },
+      onPanResponderRelease: (_, g) => {
+        const base = isSwipedOpenRef.current ? -SWIPE_ACTIONS_WIDTH : 0;
+        const finalX = base + g.dx;
+        if (finalX < -SWIPE_ACTIONS_WIDTH * 0.42 || g.vx < -0.45) {
+          openSwipe();
+        } else {
+          closeSwipe();
+        }
+      },
+      onPanResponderTerminate: () => {
+        if (isSwipedOpenRef.current) openSwipe();
+        else closeSwipe();
+      },
+    })
+  ).current;
 
   const artistName = song.artist || 'Unknown Artist';
   const genreName = song.genre || 'Pop';
@@ -49,13 +115,98 @@ function SongItem({
 
   return (
     <>
-      <TouchableOpacity
-        style={styles.row}
-        onPress={isSelectionMode ? () => onToggleSelect && onToggleSelect(song.id) : onPress}
-        onLongPress={!isSelectionMode && onLongPress ? () => onLongPress(song.id) : undefined}
-        delayLongPress={320}
-        activeOpacity={0.65}
-      >
+      <View style={styles.swipeContainer}>
+        {/* 3 Aksi Penting Saat Slide ke Kiri */}
+        {!isSelectionMode && (
+          <View style={styles.swipeActionsRow}>
+            <TouchableOpacity
+              style={[styles.swipeActionBtn, { backgroundColor: '#0EA5E9' }]}
+              onPress={() => {
+                hapticLight();
+                closeSwipe();
+                onPlayNext && onPlayNext(song);
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="play-skip-forward" size={18} color="#FFFFFF" />
+              <Text style={styles.swipeActionLabel}>Berikutnya</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.swipeActionBtn, { backgroundColor: '#0284C7' }]}
+              onPress={() => {
+                hapticLight();
+                closeSwipe();
+                onToggleFavorite && onToggleFavorite(song.id);
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name={isFavorite ? 'heart-dislike' : 'heart'}
+                size={18}
+                color="#FFFFFF"
+              />
+              <Text style={styles.swipeActionLabel}>
+                {isFavorite ? 'Batal Fav' : 'Favorit'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.swipeActionBtn, { backgroundColor: theme.danger }]}
+              onPress={() => {
+                hapticLight();
+                closeSwipe();
+                if (onRemoveFromPlaylist) {
+                  onRemoveFromPlaylist(song.id);
+                } else {
+                  setConfirmDeleteVisible(true);
+                }
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name={onRemoveFromPlaylist ? 'remove-circle-outline' : 'trash-outline'}
+                size={18}
+                color="#FFFFFF"
+              />
+              <Text style={styles.swipeActionLabel}>
+                {onRemoveFromPlaylist ? 'Keluarkan' : 'Hapus'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <Animated.View
+          {...panResponder.panHandlers}
+          style={{
+            backgroundColor: theme.bg,
+            transform: [{ translateX }],
+          }}
+        >
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => {
+              if (isSwipedOpenRef.current) {
+                closeSwipe();
+                return;
+              }
+              if (isSelectionMode) {
+                onToggleSelect && onToggleSelect(song.id);
+              } else {
+                onPress && onPress();
+              }
+            }}
+            onLongPress={
+              !isSelectionMode && onLongPress
+                ? () => {
+                    if (isSwipedOpenRef.current) closeSwipe();
+                    onLongPress(song.id);
+                  }
+                : undefined
+            }
+            delayLongPress={320}
+            activeOpacity={0.65}
+          >
         {isSelectionMode && (
           <View style={{ marginRight: 11 }}>
             <Ionicons
@@ -164,6 +315,8 @@ function SongItem({
           )}
         </View>
       </TouchableOpacity>
+      </Animated.View>
+      </View>
 
       {/* iOS Context Sheet */}
       {menuVisible && (
@@ -222,6 +375,18 @@ function SongItem({
                     onPlayNext && onPlayNext(song);
                   },
                 },
+                ...(onRemoveFromPlaylist
+                  ? [
+                      {
+                        label: 'Keluarkan dari Playlist ini',
+                        icon: 'remove-circle-outline',
+                        onPress: () => {
+                          setMenuVisible(false);
+                          onRemoveFromPlaylist(song.id);
+                        },
+                      },
+                    ]
+                  : []),
                 {
                   label: isFavorite ? 'Hapus dari Favorit' : 'Tambah ke Favorit',
                   icon: isFavorite ? 'heart-dislike-outline' : 'heart-outline',
@@ -432,63 +597,55 @@ function SongItem({
       </Modal>
       )}
 
-      {/* Konfirmasi Hapus */}
+      {/* Konfirmasi Hapus (Selaras 100% dengan Design System AppDialog) */}
       {confirmDeleteVisible && (
-      <Modal
-        visible={confirmDeleteVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setConfirmDeleteVisible(false)}
-      >
-        <View style={[styles.modalOverlay, { backgroundColor: theme.overlay }]}>
-          <View
-            style={[
-              styles.confirmCard,
-              {
-                backgroundColor: theme.surface,
-                borderColor: theme.border,
-              },
-            ]}
-          >
-            <Text style={[styles.confirmTitle, { color: theme.text }]}>
-              Hapus Lagu?
-            </Text>
-            <Text style={[styles.confirmText, { color: theme.textSecondary }]}>
-              &quot;{song.title}&quot; akan dihapus permanen dari pustaka Anda.
-            </Text>
-            <View style={styles.confirmRow}>
-              <TouchableOpacity
-                style={styles.confirmCancel}
-                onPress={() => setConfirmDeleteVisible(false)}
-              >
-                <Text
-                  style={[
-                    styles.confirmCancelText,
-                    { color: theme.textSecondary },
-                  ]}
-                >
-                  Batal
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.confirmDelete, { backgroundColor: theme.danger }]}
-                onPress={() => {
-                  setConfirmDeleteVisible(false);
-                  onDelete(song.id);
-                }}
-              >
-                <Text style={styles.confirmDeleteText}>Hapus</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        <AppDialog
+          visible={confirmDeleteVisible}
+          title="Hapus Lagu?"
+          message={`"${song.title}" akan dihapus permanen dari penyimpanan SoundVault.`}
+          type="danger"
+          confirmText="Hapus"
+          cancelText="Batal"
+          theme={theme}
+          onCancel={() => setConfirmDeleteVisible(false)}
+          onConfirm={() => {
+            setConfirmDeleteVisible(false);
+            onDelete(song.id);
+          }}
+        />
       )}
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  swipeContainer: {
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  swipeActionsRow: {
+    position: 'absolute',
+    top: 2,
+    bottom: 2,
+    right: 0,
+    width: SWIPE_ACTIONS_WIDTH,
+    flexDirection: 'row',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  swipeActionBtn: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+  },
+  swipeActionLabel: {
+    fontFamily: CENURA_FONT,
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 3,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

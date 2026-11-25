@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,8 @@ export default function PlaylistView({
   favorites = [],
   theme,
   playerStatus,
+  createTriggerSignal = 0,
+  onShowDialog,
   onCreatePlaylistWithSongs,
   onSetPlaylistSongs,
   onUpdatePlaylistInfo,
@@ -53,6 +55,23 @@ export default function PlaylistView({
   const [newPlSongIds, setNewPlSongIds] = useState([]);
   const [isPickerForCreate, setIsPickerForCreate] = useState(false);
   const [isPickerForDetail, setIsPickerForDetail] = useState(false);
+  const [isRenameModalVisible, setIsRenameModalVisible] = useState(false);
+  const [renamePlText, setRenamePlText] = useState('');
+  const [createError, setCreateError] = useState('');
+
+  const openCreateModal = () => {
+    setNewPlName('');
+    setNewPlCover(null);
+    setNewPlSongIds([]);
+    setCreateError('');
+    setIsCreateModalVisible(true);
+  };
+
+  useEffect(() => {
+    if (createTriggerSignal > 0) {
+      openCreateModal();
+    }
+  }, [createTriggerSignal]);
 
   const activePlaylist = playlists.find((p) => p.id === selectedPlaylistId) || null;
 
@@ -73,9 +92,10 @@ export default function PlaylistView({
   const handleConfirmCreatePlaylist = async () => {
     const clean = newPlName.trim();
     if (!clean) {
-      Alert.alert('Nama Kosong', 'Masukkan nama playlist terlebih dahulu.');
+      setCreateError('Masukkan nama playlist terlebih dahulu.');
       return;
     }
+    setCreateError('');
     hapticSuccess();
     await onCreatePlaylistWithSongs(clean, newPlSongIds, newPlCover);
     setNewPlName('');
@@ -85,26 +105,22 @@ export default function PlaylistView({
   };
 
   const handleConfirmDeletePlaylist = (pl) => {
-    if (Platform.OS === 'web') {
+    if (onShowDialog) {
+      onShowDialog({
+        title: 'Hapus Playlist?',
+        message: `Playlist "${pl.name}" akan dihapus. File lagu di pustaka tetap aman.`,
+        type: 'danger',
+        confirmText: 'Hapus',
+        cancelText: 'Batal',
+        onConfirm: () => {
+          onDeletePlaylist(pl.id);
+          if (selectedPlaylistId === pl.id) setSelectedPlaylistId(null);
+        },
+      });
+    } else {
       onDeletePlaylist(pl.id);
       if (selectedPlaylistId === pl.id) setSelectedPlaylistId(null);
-      return;
     }
-    Alert.alert(
-      'Hapus Playlist?',
-      `Playlist "${pl.name}" akan dihapus. File lagu di pustaka tetap aman.`,
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Hapus',
-          style: 'destructive',
-          onPress: () => {
-            onDeletePlaylist(pl.id);
-            if (selectedPlaylistId === pl.id) setSelectedPlaylistId(null);
-          },
-        },
-      ]
-    );
   };
 
   const handleChangeActiveCover = async () => {
@@ -137,6 +153,16 @@ export default function PlaylistView({
           </TouchableOpacity>
 
           <View style={styles.detailTopRight}>
+            <TouchableOpacity
+              style={[styles.iconCircleBtn, { backgroundColor: theme.surfaceElevated }]}
+              onPress={() => {
+                hapticSelection();
+                setRenamePlText(activePlaylist.name || '');
+                setIsRenameModalVisible(true);
+              }}
+            >
+              <Ionicons name="create-outline" size={17} color={theme.accent} />
+            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.iconCircleBtn, { backgroundColor: theme.surfaceElevated }]}
               onPress={handleChangeActiveCover}
@@ -256,6 +282,9 @@ export default function PlaylistView({
               playlists={playlists}
               onPress={() => onPlaySong(item, index, plSongs)}
               onPlayNext={onPlayNext}
+              onRemoveFromPlaylist={(songId) =>
+                onToggleSongInPlaylist && onToggleSongInPlaylist(activePlaylist.id, songId)
+              }
               onToggleFavorite={onToggleFavorite}
               onToggleSongInPlaylist={onToggleSongInPlaylist}
               onCreatePlaylist={onCreatePlaylist}
@@ -277,6 +306,80 @@ export default function PlaylistView({
             onConfirm={(ids) => onSetPlaylistSongs(activePlaylist.id, ids)}
           />
         )}
+
+        {isRenameModalVisible && (
+          <Modal
+            visible={isRenameModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setIsRenameModalVisible(false)}
+          >
+            <KeyboardAvoidingView
+              style={[styles.modalOverlay, { backgroundColor: theme.overlay }]}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
+              <View
+                style={[
+                  styles.createCard,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
+                <View style={styles.modalHeader}>
+                  <TouchableOpacity onPress={() => setIsRenameModalVisible(false)}>
+                    <Text style={[styles.modalCancel, { color: theme.textSecondary }]}>
+                      Batal
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.modalTitle, { color: theme.text }]}>
+                    Ubah Nama Playlist
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const clean = renamePlText.trim();
+                      if (clean) {
+                        hapticSuccess();
+                        onUpdatePlaylistInfo(activePlaylist.id, { name: clean });
+                      }
+                      setIsRenameModalVisible(false);
+                    }}
+                  >
+                    <Text style={[styles.modalDone, { color: theme.accent }]}>
+                      Simpan
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TextInput
+                  style={[
+                    styles.nameInput,
+                    {
+                      backgroundColor: theme.surfaceElevated,
+                      color: theme.text,
+                      borderColor: theme.border,
+                      marginBottom: 4,
+                    },
+                  ]}
+                  placeholder="Nama playlist baru"
+                  placeholderTextColor={theme.textMuted}
+                  value={renamePlText}
+                  onChangeText={setRenamePlText}
+                  autoFocus
+                  onSubmitEditing={() => {
+                    const clean = renamePlText.trim();
+                    if (clean) {
+                      hapticSuccess();
+                      onUpdatePlaylistInfo(activePlaylist.id, { name: clean });
+                    }
+                    setIsRenameModalVisible(false);
+                  }}
+                />
+              </View>
+            </KeyboardAvoidingView>
+          </Modal>
+        )}
       </View>
     );
   }
@@ -291,7 +394,7 @@ export default function PlaylistView({
           playerStatus.currentSong ? { paddingBottom: 120 } : { paddingBottom: 28 },
         ]}
       >
-        {/* Header Baris Playlist + Tombol Buat Playlist Langsung */}
+        {/* Header Baris Playlist (Bersih tanpa tombol biru bertumpuk; tombol + ada di header & kartu carousel) */}
         <View style={styles.hubHeader}>
           <View>
             <Text style={[styles.hubTitle, { color: theme.text }]}>Playlist</Text>
@@ -299,26 +402,11 @@ export default function PlaylistView({
               {playlists.length} koleksi pribadi
             </Text>
           </View>
-
-          <TouchableOpacity
-            style={[styles.createBtn, { backgroundColor: theme.accentStrong }]}
-            onPress={() => {
-              hapticSelection();
-              setNewPlName('');
-              setNewPlCover(null);
-              setNewPlSongIds([]);
-              setIsCreateModalVisible(true);
-            }}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="add" size={18} color="#FFFFFF" />
-            <Text style={styles.createBtnText}>Buat Playlist</Text>
-          </TouchableOpacity>
         </View>
 
         {playlists.length === 0 ? (
           <View style={styles.emptyHub}>
-            <View
+            <TouchableOpacity
               style={[
                 styles.emptyCardPreview,
                 {
@@ -326,6 +414,11 @@ export default function PlaylistView({
                   borderColor: theme.border,
                 },
               ]}
+              onPress={() => {
+                hapticSelection();
+                openCreateModal();
+              }}
+              activeOpacity={0.8}
             >
               <View
                 style={[
@@ -333,25 +426,43 @@ export default function PlaylistView({
                   { backgroundColor: theme.surfaceElevated },
                 ]}
               >
-                <AntigravityLogo size={42} theme={theme} />
+                <Ionicons name="add" size={38} color={theme.accent} />
               </View>
               <Text style={[styles.emptyCardTitle, { color: theme.text }]}>
-                Belum Ada Playlist
+                Buat Playlist Pertama
               </Text>
               <Text style={[styles.emptyCardSub, { color: theme.textSecondary }]}>
-                Buat playlist dulu, lalu langsung pilih banyak lagu sekaligus tanpa ribet.
+                Ketuk kartu ini atau tombol "+" di atas, lalu pilih banyak lagu sekaligus.
               </Text>
-            </View>
+            </TouchableOpacity>
           </View>
         ) : (
           <>
-            {/* Carousel Kartu Besar (Persis Proporsi & Gaya Foto Referensi) */}
+            {/* Carousel Kartu Besar (Tombol + Ramping Nempel di Kiri, Kartu Playlist di Sebelahnya) */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.carouselScroll}
               decelerationRate="fast"
             >
+              {/* Kartu Ultra-Tipis "+" di Paling Kiri */}
+              <TouchableOpacity
+                style={[
+                  styles.addPlaylistCard,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                  },
+                ]}
+                onPress={() => {
+                  hapticSelection();
+                  openCreateModal();
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add" size={20} color={theme.accent} />
+              </TouchableOpacity>
+
               {playlists.map((pl) => {
                 const coverUri = getPlaylistCover(pl);
                 const count = (pl.songIds || []).length;
@@ -542,9 +653,18 @@ export default function PlaylistView({
                 placeholder="Nama playlist (misal: Chill Malam)"
                 placeholderTextColor={theme.textMuted}
                 value={newPlName}
-                onChangeText={setNewPlName}
+                onChangeText={(txt) => {
+                  setNewPlName(txt);
+                  if (createError) setCreateError('');
+                }}
                 autoFocus
               />
+
+              {!!createError && (
+                <Text style={{ color: theme.danger, fontSize: 12, marginTop: -6, marginBottom: 10, fontFamily: CENURA_FONT }}>
+                  {createError}
+                </Text>
+              )}
 
               <TouchableOpacity
                 style={[
@@ -674,6 +794,14 @@ const styles = StyleSheet.create({
     fontFamily: CENURA_FONT,
     fontSize: 12.5,
     marginTop: 2,
+  },
+  addPlaylistCard: {
+    width: 36,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sectionLabel: {
     fontFamily: CENURA_FONT,
