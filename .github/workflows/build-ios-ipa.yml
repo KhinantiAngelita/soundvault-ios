@@ -27,7 +27,9 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies
-        run: npm install
+        run: |
+          npm install
+          sed -i '' 's/swiftLanguageModes: \[.v6\]/swiftLanguageModes: [.v5]/g' node_modules/expo-modules-jsi/apple/Package.swift
 
       - name: Expo Prebuild (Generate Native iOS Project)
         run: |
