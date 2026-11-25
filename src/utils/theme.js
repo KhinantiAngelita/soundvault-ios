@@ -1,3 +1,10 @@
+import { Platform } from 'react-native';
+
+export const CENURA_FONT =
+  Platform.OS === 'web'
+    ? "'Outfit', 'CenuraGeometric', -apple-system, BlinkMacSystemFont, sans-serif"
+    : 'CenuraGeometric';
+
 // Sistem Tema Minimalis (Mode Hitam & Putih) dengan Aksen Light Blue
 export const THEMES = {
   dark: {

@@ -5,18 +5,20 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-ipa:
-    name: Build SoundVault.ipa on macOS
-    runs-on: macos-15
+    name: Build SoundVault.ipa on macOS 26 (Xcode 26.6)
+    runs-on: macos-26
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Select Xcode 26.3 (Swift 6.2 for Expo SDK 58)
+      - name: Verify Xcode 26.6 Toolchain
         run: |
-          sudo xcode-select -s /Applications/Xcode_26.3.app
           xcodebuild -version
           swift --version
 
@@ -26,26 +28,8 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Install Dependencies & Patch Swift 6.2 Region Isolation
-        run: |
-          npm install
-          node -e '
-            const fs = require("fs");
-            const file = "node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI/Runtime/Values/JavaScriptObject.swift";
-            if (fs.existsSync(file)) {
-              let code = fs.readFileSync(file, "utf8");
-              code = code.replace(
-                "nonisolated(unsafe) let slot = buffer.baseAddress!",
-                "nonisolated(unsafe) let slot = buffer.baseAddress!\n    let slotAddr = Int(bitPattern: slot)"
-              );
-              code = code.replace(
-                "try encode(JavaScriptValue.Slot(slot), runtime)",
-                "try encode(JavaScriptValue.Slot(UnsafeMutablePointer<facebook.jsi.Value>(bitPattern: slotAddr)!), runtime)"
-              );
-              fs.writeFileSync(file, code, "utf8");
-              console.log("Patched JavaScriptObject.swift for Xcode 26.3 Swift 6.2 region isolation");
-            }
-          '
+      - name: Install Dependencies
+        run: npm install
 
       - name: Expo Prebuild (Generate Native iOS Project)
         run: |
@@ -76,7 +60,9 @@ jobs:
           EXIT_CODE=$?
           if [ $EXIT_CODE -ne 0 ]; then
             echo "=== XCODEBUILD ERRORS ==="
-            grep -E "error:|BUILD FAILED" xcodebuild.log | tail -n 50
+            grep -E "error:|BUILD FAILED" xcodebuild.log | tail -n 30 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
             tail -n 100 xcodebuild.log
             exit $EXIT_CODE
           fi
@@ -89,6 +75,7 @@ jobs:
           echo "Found built app at: $APP_PATH"
           cp -R "$APP_PATH" Payload/
           zip -r -q SoundVault.ipa Payload
+          ls -lh SoundVault.ipa
 
       - name: Upload SoundVault.ipa Artifact
         uses: actions/upload-artifact@v4
@@ -96,3 +83,12 @@ jobs:
           name: SoundVault-iOS-IPA
           path: SoundVault.ipa
           retention-days: 30
+
+      - name: Publish SoundVault.ipa to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create v1.0.0 SoundVault.ipa \
+            --title "SoundVault iOS v1.0.0" \
+            --notes "File instalasi SoundVault.ipa siap pasang ke iPhone 11 via Sideloadly / SideStore." \
+            --clobber || gh release upload v1.0.0 SoundVault.ipa --clobber

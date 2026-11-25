@@ -1,96 +1,61 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import Svg, { Defs, LinearGradient, RadialGradient, Stop, Path } from 'react-native-svg';
 
 /**
- * Logo bergaya Antigravity:
- * Bentuk cincin orbit miring dengan inti melayang (levitating core & delta wing)
- * menggunakan warna aksen Light Blue.
+ * Logo Minimalis Gradient:
+ * Konsep simpel tanpa kotak pembungkus (seperti ikon SoundVault awal),
+ * namun dengan bentuk lengkungan ikonik Antigravity bergradasi iOS Light Blue.
  */
-export default function AntigravityLogo({ size = 34, theme }) {
-  const scale = size / 34;
-
+export default function AntigravityLogo({ size = 28 }) {
   return (
-    <View
-      style={[
-        styles.wrapper,
-        {
-          width: size,
-          height: size,
-          borderRadius: size * 0.3,
-          backgroundColor: theme.accentSoft,
-          borderColor: theme.accentBorder,
-        },
-      ]}
-    >
-      {/* Cincin Orbit Luar (Elliptical Ring) */}
-      <View
-        style={[
-          styles.orbitRing,
-          {
-            width: 24 * scale,
-            height: 11 * scale,
-            borderRadius: 12 * scale,
-            borderColor: theme.accent,
-          },
-        ]}
-      />
+    <View style={[styles.container, { width: size, height: size }]}>
+      <Svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+        <Defs>
+          {/* Gradasi Utama iOS Light Blue (Atas ke Bawah) */}
+          <LinearGradient id="agyMainGrad" x1="18" y1="4" x2="18" y2="31" gradientUnits="userSpaceOnUse">
+            <Stop offset="0%" stopColor="#BAE6FD" />
+            <Stop offset="45%" stopColor="#38BDF8" />
+            <Stop offset="100%" stopColor="#0284C7" />
+          </LinearGradient>
 
-      {/* Sayap/Puncak Delta Antigravity */}
-      <View
-        style={[
-          styles.deltaApex,
-          {
-            width: 11 * scale,
-            height: 11 * scale,
-            borderTopColor: theme.accentStrong,
-            borderRightColor: theme.accentStrong,
-            transform: [{ rotate: '-45deg' }, { translateY: -1 * scale }],
-          },
-        ]}
-      />
+          {/* Pendaran Halus (Inner Ambient Glow) di Bawah Lengkungan */}
+          <RadialGradient
+            id="agyGlowGrad"
+            cx="18"
+            cy="23"
+            rx="10"
+            ry="8"
+            gradientUnits="userSpaceOnUse"
+          >
+            <Stop offset="0%" stopColor="#38BDF8" stopOpacity="0.42" />
+            <Stop offset="65%" stopColor="#0EA5E9" stopOpacity="0.12" />
+            <Stop offset="100%" stopColor="#0EA5E9" stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
 
-      {/* Inti Melayang (Levitating Core Sphere) */}
-      <View
-        style={[
-          styles.coreDot,
-          {
-            width: 6.5 * scale,
-            height: 6.5 * scale,
-            borderRadius: 4 * scale,
-            backgroundColor: '#38BDF8',
-            shadowColor: '#38BDF8',
-          },
-        ]}
-      />
+        {/* Pendaran Gravitasi Halus di Bawah Lengkungan */}
+        <Path
+          d="M7 28 C11 16, 25 16, 29 28 Z"
+          fill="url(#agyGlowGrad)"
+        />
+
+        {/* Bentuk Utama Lengkungan Antigravity (Smooth Fluid Arch Ribbon) */}
+        <Path
+          d="M5.5 27.5 C8.5 27.5, 12.2 7.5, 18 7.5 C23.8 7.5, 27.5 27.5, 30.5 27.5"
+          stroke="url(#agyMainGrad)"
+          strokeWidth="4.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
+  container: {
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  orbitRing: {
-    position: 'absolute',
-    borderWidth: 1.6,
-    transform: [{ rotate: '-24deg' }],
-    opacity: 0.85,
-  },
-  deltaApex: {
-    position: 'absolute',
-    borderTopWidth: 2.2,
-    borderRightWidth: 2.2,
-    borderRadius: 2,
-  },
-  coreDot: {
-    position: 'absolute',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 6,
-    elevation: 4,
   },
 });

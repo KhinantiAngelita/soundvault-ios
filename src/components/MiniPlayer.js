@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AntigravityLogo from './AntigravityLogo';
+import { CENURA_FONT } from '../utils/theme';
 
 export default function MiniPlayer({
   currentSong,
@@ -18,19 +19,40 @@ export default function MiniPlayer({
   const progress = duration > 0 ? Math.min(position / duration, 1) : 0;
   const artistName = currentSong.artist || 'Unknown Artist';
   const genreName = currentSong.genre || 'Pop';
+  const isLight = theme.mode === 'light';
 
   return (
     <View
       style={[
         styles.wrapper,
         {
-          backgroundColor: theme.surface,
-          borderColor: theme.accentBorder,
+          // Hanya bar MiniPlayer yang memiliki konsep Liquid Glass transparan + blur
+          backgroundColor: isLight
+            ? 'rgba(255, 255, 255, 0.52)'
+            : 'rgba(18, 23, 33, 0.56)',
+          borderColor: isLight
+            ? 'rgba(255, 255, 255, 0.85)'
+            : 'rgba(125, 211, 252, 0.25)',
         },
+        Platform.OS === 'web'
+          ? {
+              backdropFilter: 'blur(24px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+            }
+          : {},
       ]}
     >
-      {/* Progress Bar Tipis Light Blue */}
-      <View style={[styles.progressBarBackground, { backgroundColor: theme.border }]}>
+      {/* Progress Bar Tipis Light Blue di Atas (Persis seperti sebelumnya) */}
+      <View
+        style={[
+          styles.progressBarBackground,
+          {
+            backgroundColor: isLight
+              ? 'rgba(14, 165, 233, 0.14)'
+              : 'rgba(255, 255, 255, 0.10)',
+          },
+        ]}
+      >
         <View
           style={[
             styles.progressBarFill,
@@ -48,7 +70,15 @@ export default function MiniPlayer({
         activeOpacity={0.9}
       >
         <View style={styles.logoWrap}>
-          <AntigravityLogo size={38} theme={theme} />
+          {currentSong.coverUri ? (
+            <Image
+              source={{ uri: currentSong.coverUri }}
+              style={styles.miniCoverImg}
+              resizeMode="cover"
+            />
+          ) : (
+            <AntigravityLogo size={34} theme={theme} />
+          )}
         </View>
 
         <View style={styles.textContainer}>
@@ -103,8 +133,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#0284C7',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
     elevation: 10,
     borderWidth: 1,
   },
@@ -124,15 +154,23 @@ const styles = StyleSheet.create({
   logoWrap: {
     marginRight: 12,
   },
+  miniCoverImg: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+  },
   textContainer: {
     flex: 1,
     marginRight: 10,
   },
   title: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: CENURA_FONT,
+    fontSize: 14.5,
+    fontWeight: '500',
+    letterSpacing: -0.2,
   },
   subtitle: {
+    fontFamily: CENURA_FONT,
     fontSize: 11.5,
     marginTop: 2,
   },
