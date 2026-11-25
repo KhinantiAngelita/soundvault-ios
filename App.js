@@ -9,11 +9,13 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
+  Platform,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
   getStoredSongs,
+  saveSongsMetadata,
   importSongFromDevice,
   deleteSong,
   renameSongTitle,
@@ -21,6 +23,7 @@ import {
   toggleFavoriteSong,
 } from './src/services/storageService';
 import { audioPlayer } from './src/services/audioService';
+import { generateDemoSongs } from './src/utils/demoSongs';
 import SongItem from './src/components/SongItem';
 import MiniPlayer from './src/components/MiniPlayer';
 import PlayerModal from './src/components/PlayerModal';
@@ -79,7 +82,9 @@ export default function App() {
       const result = await importSongFromDevice();
       if (result.success) {
         setSongs(result.songs);
-        Alert.alert('Sukses!', `${result.count} lagu berhasil disimpan ke memori iPhone.`);
+        if (Platform.OS !== 'web') {
+          Alert.alert('Sukses!', `${result.count} lagu berhasil disimpan ke memori iPhone.`);
+        }
       } else if (result.error) {
         Alert.alert('Gagal Mengimpor', result.error);
       }
@@ -88,6 +93,13 @@ export default function App() {
     } finally {
       setIsImporting(false);
     }
+  };
+
+  const handleLoadDemoSongs = async () => {
+    const demoTracks = generateDemoSongs();
+    const updated = [...demoTracks, ...songs];
+    setSongs(updated);
+    await saveSongsMetadata(updated);
   };
 
   const handlePlaySong = async (song, index) => {
@@ -138,177 +150,199 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.outerBackground}>
         <StatusBar barStyle="light-content" backgroundColor="#0B0B0E" />
-
-        {/* Top Header */}
-        <View style={styles.header}>
-          <View>
-            <View style={styles.logoRow}>
-              <Ionicons name="musical-notes" size={24} color="#8B5CF6" />
-              <Text style={styles.appTitle}>SoundVault</Text>
+        <View style={styles.container}>
+          {/* Top Header */}
+          <View style={styles.header}>
+            <View>
+              <View style={styles.logoRow}>
+                <Ionicons name="musical-notes" size={24} color="#8B5CF6" />
+                <Text style={styles.appTitle}>SoundVault</Text>
+              </View>
+              <Text style={styles.appSubtitle}>Pemutar Musik Offline • 0 Iklan</Text>
             </View>
-            <Text style={styles.appSubtitle}>Pemutar Musik Offline • 0 Iklan</Text>
-          </View>
 
-          <TouchableOpacity
-            style={styles.importBtn}
-            onPress={handleImportSongs}
-            disabled={isImporting}
-            activeOpacity={0.8}
-          >
-            {isImporting ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Ionicons name="add" size={20} color="#FFFFFF" />
-                <Text style={styles.importBtnText}>Tambah</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={18} color="#6B7280" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Cari lagu di penyimpanan..."
-            placeholderTextColor="#6B7280"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            clearButtonMode="while-editing"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={18} color="#6B7280" />
+            <TouchableOpacity
+              style={styles.importBtn}
+              onPress={handleImportSongs}
+              disabled={isImporting}
+              activeOpacity={0.8}
+            >
+              {isImporting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="add" size={20} color="#FFFFFF" />
+                  <Text style={styles.importBtnText}>Tambah Lagu</Text>
+                </>
+              )}
             </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Tab Filter (Semua Lagu vs Favorit) */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'all' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('all')}
-          >
-            <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
-              Semua Lagu ({songs.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'favorites' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('favorites')}
-          >
-            <Text style={[styles.tabText, activeTab === 'favorites' && styles.tabTextActive]}>
-              Favorit ({favorites.length})
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Konten Daftar Lagu */}
-        {isLoading ? (
-          <View style={styles.centerBox}>
-            <ActivityIndicator size="large" color="#8B5CF6" />
-            <Text style={styles.loadingText}>Memuat koleksi musik...</Text>
           </View>
-        ) : displayedSongs.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconBox}>
-              <Ionicons
-                name={activeTab === 'favorites' ? 'heart-dislike' : 'cloud-upload'}
-                size={48}
-                color="#6B7280"
-              />
-            </View>
-            <Text style={styles.emptyTitle}>
-              {activeTab === 'favorites'
-                ? 'Belum Ada Lagu Favorit'
-                : searchQuery
-                ? 'Lagu Tidak Ditemukan'
-                : 'Penyimpanan Masih Kosong'}
-            </Text>
-            <Text style={styles.emptySubtitle}>
-              {activeTab === 'favorites'
-                ? 'Tandai lagu dengan ikon hati untuk memindahkannya ke sini.'
-                : searchQuery
-                ? `Tidak ada lagu yang cocok dengan "${searchQuery}".`
-                : 'Tekan tombol "+ Tambah" di atas untuk memilih lagu dari aplikasi Files iPhone Anda.'}
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={displayedSongs}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={[
-              styles.listContent,
-              playerStatus.currentSong ? { paddingBottom: 110 } : { paddingBottom: 30 },
-            ]}
-            renderItem={({ item, index }) => (
-              <SongItem
-                song={item}
-                isPlaying={playerStatus.isPlaying}
-                isCurrentSong={playerStatus.currentSong?.id === item.id}
-                isFavorite={favorites.includes(item.id)}
-                onPress={() => handlePlaySong(item, index)}
-                onToggleFavorite={handleToggleFavorite}
-                onRename={(song) => setSongToRename(song)}
-                onDelete={handleDeleteSong}
-              />
+
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={18} color="#6B7280" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Cari lagu di penyimpanan..."
+              placeholderTextColor="#6B7280"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              clearButtonMode="while-editing"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={18} color="#6B7280" />
+              </TouchableOpacity>
             )}
+          </View>
+
+          {/* Tab Filter (Semua Lagu vs Favorit) */}
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tabBtn, activeTab === 'all' && styles.tabBtnActive]}
+              onPress={() => setActiveTab('all')}
+            >
+              <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
+                Semua Lagu ({songs.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabBtn, activeTab === 'favorites' && styles.tabBtnActive]}
+              onPress={() => setActiveTab('favorites')}
+            >
+              <Text style={[styles.tabText, activeTab === 'favorites' && styles.tabTextActive]}>
+                Favorit ({favorites.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Konten Daftar Lagu */}
+          {isLoading ? (
+            <View style={styles.centerBox}>
+              <ActivityIndicator size="large" color="#8B5CF6" />
+              <Text style={styles.loadingText}>Memuat koleksi musik...</Text>
+            </View>
+          ) : displayedSongs.length === 0 ? (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconBox}>
+                <Ionicons
+                  name={activeTab === 'favorites' ? 'heart-dislike' : 'cloud-upload'}
+                  size={48}
+                  color="#6B7280"
+                />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {activeTab === 'favorites'
+                  ? 'Belum Ada Lagu Favorit'
+                  : searchQuery
+                  ? 'Lagu Tidak Ditemukan'
+                  : 'Penyimpanan Masih Kosong'}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {activeTab === 'favorites'
+                  ? 'Tandai lagu dengan ikon hati untuk memindahkannya ke sini.'
+                  : searchQuery
+                  ? `Tidak ada lagu yang cocok dengan "${searchQuery}".`
+                  : 'Tekan tombol "+ Tambah Lagu" di atas untuk memilih file MP3/audio dari perangkat Anda.'}
+              </Text>
+
+              {activeTab === 'all' && !searchQuery && (
+                <TouchableOpacity
+                  style={styles.demoBtn}
+                  onPress={handleLoadDemoSongs}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="sparkles" size={16} color="#A78BFA" />
+                  <Text style={styles.demoBtnText}>Muat 3 Lagu Contoh (Uji Coba Fitur)</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            <FlatList
+              data={displayedSongs}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={[
+                styles.listContent,
+                playerStatus.currentSong ? { paddingBottom: 110 } : { paddingBottom: 30 },
+              ]}
+              renderItem={({ item, index }) => (
+                <SongItem
+                  song={item}
+                  isPlaying={playerStatus.isPlaying}
+                  isCurrentSong={playerStatus.currentSong?.id === item.id}
+                  isFavorite={favorites.includes(item.id)}
+                  onPress={() => handlePlaySong(item, index)}
+                  onToggleFavorite={handleToggleFavorite}
+                  onRename={(song) => setSongToRename(song)}
+                  onDelete={handleDeleteSong}
+                />
+              )}
+            />
+          )}
+
+          {/* Mini Player Melayang di Bawah */}
+          <MiniPlayer
+            currentSong={playerStatus.currentSong}
+            isPlaying={playerStatus.isPlaying}
+            position={playerStatus.position}
+            duration={playerStatus.duration}
+            onPress={() => setIsPlayerModalVisible(true)}
+            onTogglePlayPause={() => audioPlayer.togglePlayPause()}
+            onNext={() => audioPlayer.nextSong()}
           />
-        )}
 
-        {/* Mini Player Melayang di Bawah */}
-        <MiniPlayer
-          currentSong={playerStatus.currentSong}
-          isPlaying={playerStatus.isPlaying}
-          position={playerStatus.position}
-          duration={playerStatus.duration}
-          onPress={() => setIsPlayerModalVisible(true)}
-          onTogglePlayPause={() => audioPlayer.togglePlayPause()}
-          onNext={() => audioPlayer.nextSong()}
-        />
+          {/* Modal Player Layar Penuh */}
+          <PlayerModal
+            visible={isPlayerModalVisible}
+            onClose={() => setIsPlayerModalVisible(false)}
+            currentSong={playerStatus.currentSong}
+            isPlaying={playerStatus.isPlaying}
+            duration={playerStatus.duration}
+            position={playerStatus.position}
+            repeatMode={playerStatus.repeatMode}
+            isShuffle={playerStatus.isShuffle}
+            isFavorite={
+              playerStatus.currentSong ? favorites.includes(playerStatus.currentSong.id) : false
+            }
+            onTogglePlayPause={() => audioPlayer.togglePlayPause()}
+            onNext={() => audioPlayer.nextSong()}
+            onPrevious={() => audioPlayer.previousSong()}
+            onSeek={(val) => audioPlayer.seekTo(val)}
+            onToggleRepeat={() => audioPlayer.toggleRepeatMode()}
+            onToggleShuffle={() => audioPlayer.toggleShuffle()}
+            onToggleFavorite={handleToggleFavorite}
+          />
 
-        {/* Modal Player Layar Penuh */}
-        <PlayerModal
-          visible={isPlayerModalVisible}
-          onClose={() => setIsPlayerModalVisible(false)}
-          currentSong={playerStatus.currentSong}
-          isPlaying={playerStatus.isPlaying}
-          duration={playerStatus.duration}
-          position={playerStatus.position}
-          repeatMode={playerStatus.repeatMode}
-          isShuffle={playerStatus.isShuffle}
-          isFavorite={
-            playerStatus.currentSong ? favorites.includes(playerStatus.currentSong.id) : false
-          }
-          onTogglePlayPause={() => audioPlayer.togglePlayPause()}
-          onNext={() => audioPlayer.nextSong()}
-          onPrevious={() => audioPlayer.previousSong()}
-          onSeek={(val) => audioPlayer.seekTo(val)}
-          onToggleRepeat={() => audioPlayer.toggleRepeatMode()}
-          onToggleShuffle={() => audioPlayer.toggleShuffle()}
-          onToggleFavorite={handleToggleFavorite}
-        />
-
-        {/* Modal Ganti Nama Lagu */}
-        <RenameModal
-          visible={!!songToRename}
-          song={songToRename}
-          onClose={() => setSongToRename(null)}
-          onSave={handleSaveRename}
-        />
+          {/* Modal Ganti Nama Lagu */}
+          <RenameModal
+            visible={!!songToRename}
+            song={songToRename}
+            onClose={() => setSongToRename(null)}
+            onSave={handleSaveRename}
+          />
+        </View>
       </SafeAreaView>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  outerBackground: {
+    flex: 1,
+    backgroundColor: '#050507',
+  },
   container: {
     flex: 1,
+    width: '100%',
+    maxWidth: Platform.OS === 'web' ? 430 : '100%',
+    alignSelf: 'center',
     backgroundColor: '#0B0B0E',
+    borderLeftWidth: Platform.OS === 'web' ? 1 : 0,
+    borderRightWidth: Platform.OS === 'web' ? 1 : 0,
+    borderColor: '#1F1F2E',
   },
   header: {
     flexDirection: 'row',
@@ -414,8 +448,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
-    marginTop: -40,
+    paddingHorizontal: 36,
+    marginTop: -30,
   },
   emptyIconBox: {
     width: 80,
@@ -438,5 +472,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 20,
+  },
+  demoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E1B2E',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#8B5CF655',
+  },
+  demoBtnText: {
+    color: '#C4B5FD',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });

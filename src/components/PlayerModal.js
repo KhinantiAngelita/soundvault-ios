@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatTime } from '../utils/formatters';
 
 const { width } = Dimensions.get('window');
+const DISC_SIZE = Math.min(width * 0.68, 260);
 
 export default function PlayerModal({
   visible,
@@ -252,9 +253,9 @@ const styles = StyleSheet.create({
     elevation: 16,
   },
   vinylDisc: {
-    width: width * 0.68,
-    height: width * 0.68,
-    borderRadius: (width * 0.68) / 2,
+    width: DISC_SIZE,
+    height: DISC_SIZE,
+    borderRadius: DISC_SIZE / 2,
     backgroundColor: '#16161F',
     justifyContent: 'center',
     alignItems: 'center',
