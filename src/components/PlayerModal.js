@@ -16,6 +16,7 @@ import { formatTime, formatFileSize } from '../utils/formatters';
 import AntigravityLogo from './AntigravityLogo';
 import { CENURA_FONT } from '../utils/theme';
 import { audioPlayer } from '../services/audioService';
+import { hapticLight, hapticSelection } from '../utils/haptics';
 
 const { width } = Dimensions.get('window');
 const DISC_SIZE = Math.min(width * 0.62, 234);
@@ -42,6 +43,8 @@ export default function PlayerModal({
   playbackRate = 1.0,
   sleepTimerMinutes = 0,
   sleepTimerRemainingSec = 0,
+  abLoopA = null,
+  abLoopB = null,
   isFavorite,
   onTogglePlayPause,
   onNext,
@@ -51,6 +54,7 @@ export default function PlayerModal({
   onToggleShuffle,
   onCyclePlaybackRate,
   onSetSleepTimer,
+  onToggleABLoop,
   onSelectQueueSong,
   onToggleFavorite,
   onOpenEditor,
@@ -501,7 +505,10 @@ export default function PlayerModal({
                   playbackRate !== 1.0 ? theme.accentBorder : theme.border,
               },
             ]}
-            onPress={onCyclePlaybackRate}
+            onPress={() => {
+              hapticSelection();
+              onCyclePlaybackRate && onCyclePlaybackRate();
+            }}
           >
             <Ionicons
               name="speedometer-outline"
@@ -517,7 +524,43 @@ export default function PlayerModal({
                 },
               ]}
             >
-              Speed {playbackRate}x{playbackRate === 0.85 ? ' (Slowed)' : ''}
+              {playbackRate}x
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.toolPill,
+              {
+                backgroundColor:
+                  abLoopA !== null ? theme.accentSoft : theme.surface,
+                borderColor:
+                  abLoopA !== null ? theme.accentBorder : theme.border,
+              },
+            ]}
+            onPress={() => {
+              hapticSelection();
+              onToggleABLoop && onToggleABLoop();
+            }}
+          >
+            <Ionicons
+              name="repeat-outline"
+              size={14}
+              color={abLoopA !== null ? theme.accent : theme.textSecondary}
+            />
+            <Text
+              style={[
+                styles.toolPillText,
+                {
+                  color: abLoopA !== null ? theme.accent : theme.textSecondary,
+                },
+              ]}
+            >
+              {abLoopA === null
+                ? 'A–B'
+                : abLoopB === null
+                ? `A ${formatTime(abLoopA)} ➔ B`
+                : `${formatTime(abLoopA)}–${formatTime(abLoopB)}`}
             </Text>
           </TouchableOpacity>
 
@@ -651,7 +694,10 @@ export default function PlayerModal({
         <View style={styles.controlsRow}>
           <TouchableOpacity
             style={styles.controlSmallBtn}
-            onPress={onToggleShuffle}
+            onPress={() => {
+              hapticSelection();
+              onToggleShuffle && onToggleShuffle();
+            }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons
@@ -663,7 +709,10 @@ export default function PlayerModal({
 
           <TouchableOpacity
             style={styles.controlBtn}
-            onPress={onPrevious}
+            onPress={() => {
+              hapticLight();
+              onPrevious && onPrevious();
+            }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="play-skip-back" size={30} color={theme.text} />
@@ -677,7 +726,10 @@ export default function PlayerModal({
                 shadowColor: theme.accentStrong,
               },
             ]}
-            onPress={onTogglePlayPause}
+            onPress={() => {
+              hapticLight();
+              onTogglePlayPause && onTogglePlayPause();
+            }}
             activeOpacity={0.85}
           >
             <Ionicons
@@ -690,7 +742,10 @@ export default function PlayerModal({
 
           <TouchableOpacity
             style={styles.controlBtn}
-            onPress={onNext}
+            onPress={() => {
+              hapticLight();
+              onNext && onNext();
+            }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="play-skip-forward" size={30} color={theme.text} />
@@ -698,7 +753,10 @@ export default function PlayerModal({
 
           <TouchableOpacity
             style={styles.controlSmallBtn}
-            onPress={onToggleRepeat}
+            onPress={() => {
+              hapticSelection();
+              onToggleRepeat && onToggleRepeat();
+            }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons

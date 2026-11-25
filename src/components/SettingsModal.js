@@ -31,6 +31,11 @@ export const SORT_OPTIONS = [
     label: 'Judul (Z – A)',
     icon: 'arrow-up-outline',
   },
+  {
+    key: 'most_played',
+    label: 'Paling Sering Diputar',
+    icon: 'flame-outline',
+  },
 ];
 
 export default function SettingsModal({

@@ -33,10 +33,12 @@ import {
   toggleSongInPlaylist,
   getLastPlayedSongId,
   saveLastPlayedSongId,
+  incrementSongPlayCount,
 } from './src/services/storageService';
 import * as Font from 'expo-font';
 import { audioPlayer } from './src/services/audioService';
 import { THEMES, CENURA_FONT } from './src/utils/theme';
+import { hapticLight, hapticSelection, hapticSuccess } from './src/utils/haptics';
 import AntigravityLogo from './src/components/AntigravityLogo';
 import SongItem from './src/components/SongItem';
 import MiniPlayer from './src/components/MiniPlayer';
@@ -82,6 +84,8 @@ export default function App() {
     playbackRate: 1.0,
     sleepTimerMinutes: 0,
     sleepTimerRemainingSec: 0,
+    abLoopA: null,
+    abLoopB: null,
   });
   const [isPlayerModalVisible, setIsPlayerModalVisible] = useState(false);
   const [songToEdit, setSongToEdit] = useState(null);
@@ -133,9 +137,13 @@ export default function App() {
       setPlayerStatus(status);
     });
 
-    const unsubSongChange = audioPlayer.subscribeSongChange((song) => {
+    const unsubSongChange = audioPlayer.subscribeSongChange(async (song) => {
       if (song?.id) {
         saveLastPlayedSongId(song.id);
+        const updated = await incrementSongPlayCount(song.id);
+        if (updated) {
+          setSongs(updated);
+        }
       }
     });
 
@@ -178,11 +186,13 @@ export default function App() {
   };
 
   const handleSelectTheme = async (mode) => {
+    hapticSelection();
     setThemeMode(mode);
     await saveThemeMode(mode);
   };
 
   const handleSelectSortOrder = async (newSort) => {
+    hapticSelection();
     setSortOrder(newSort);
     await saveSortOrder(newSort);
   };
@@ -192,6 +202,7 @@ export default function App() {
     try {
       const result = await importSongFromDevice();
       if (result.success) {
+        hapticSuccess();
         setSongs(result.songs);
         if (Platform.OS !== 'web') {
           Alert.alert('Tersimpan', `${result.count} lagu ditambahkan ke penyimpanan.`);
@@ -207,11 +218,18 @@ export default function App() {
   };
 
   const handlePlaySong = async (song, index, customQueue = null) => {
+    hapticLight();
     const listToPlay = customQueue || displayedSongs;
     await audioPlayer.playSong(song, listToPlay, index);
   };
 
+  const handlePlayNext = async (song) => {
+    hapticSuccess();
+    await audioPlayer.playNext(song);
+  };
+
   const handleToggleFavorite = async (songId) => {
+    hapticLight();
     const updated = await toggleFavoriteSong(songId);
     setFavorites(updated);
   };
@@ -341,6 +359,10 @@ export default function App() {
       if (sortOrder === 'za') {
         return (b.title || '').localeCompare(a.title || '');
       }
+      if (sortOrder === 'most_played') {
+        const diff = (Number(b.playCount) || 0) - (Number(a.playCount) || 0);
+        if (diff !== 0) return diff;
+      }
       const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       if (sortOrder === 'oldest') {
@@ -361,6 +383,7 @@ export default function App() {
   ]);
 
   const handleSelectTab = (tabKey) => {
+    hapticSelection();
     setActiveTab(tabKey);
     if (tabKey !== 'artists') setSelectedArtist(null);
     if (tabKey !== 'genres') setSelectedGenre(null);
@@ -824,6 +847,7 @@ export default function App() {
                   isFavorite={favorites.includes(item.id)}
                   playlists={playlists}
                   onPress={() => handlePlaySong(item, index)}
+                  onPlayNext={handlePlayNext}
                   onToggleFavorite={handleToggleFavorite}
                   onToggleSongInPlaylist={handleToggleSongInPlaylist}
                   onCreatePlaylist={handleCreatePlaylist}
@@ -843,6 +867,7 @@ export default function App() {
               onPress={() => setIsPlayerModalVisible(true)}
               onTogglePlayPause={() => audioPlayer.togglePlayPause()}
               onNext={() => audioPlayer.nextSong()}
+              onPrevious={() => audioPlayer.previousSong()}
             />
           )}
 
@@ -852,7 +877,7 @@ export default function App() {
               visible={isPlayerModalVisible}
               onClose={() => setIsPlayerModalVisible(false)}
               currentSong={playerStatus.currentSong}
-              queue={displayedSongs}
+              queue={audioPlayer.queue.length > 0 ? audioPlayer.queue : displayedSongs}
               theme={theme}
               isPlaying={playerStatus.isPlaying}
               duration={playerStatus.duration}
@@ -862,6 +887,8 @@ export default function App() {
               playbackRate={playerStatus.playbackRate || 1.0}
               sleepTimerMinutes={playerStatus.sleepTimerMinutes || 0}
               sleepTimerRemainingSec={playerStatus.sleepTimerRemainingSec || 0}
+              abLoopA={playerStatus.abLoopA ?? null}
+              abLoopB={playerStatus.abLoopB ?? null}
               isFavorite={favorites.includes(playerStatus.currentSong.id)}
               onTogglePlayPause={() => audioPlayer.togglePlayPause()}
               onNext={() => audioPlayer.nextSong()}
@@ -871,7 +898,14 @@ export default function App() {
               onToggleShuffle={() => audioPlayer.toggleShuffle()}
               onCyclePlaybackRate={() => audioPlayer.cyclePlaybackRate()}
               onSetSleepTimer={(mins) => audioPlayer.setSleepTimer(mins)}
-              onSelectQueueSong={(track, idx) => handlePlaySong(track, idx)}
+              onToggleABLoop={() => audioPlayer.toggleABLoop()}
+              onSelectQueueSong={(track, idx) =>
+                handlePlaySong(
+                  track,
+                  idx,
+                  audioPlayer.queue.length > 0 ? audioPlayer.queue : displayedSongs
+                )
+              }
               onToggleFavorite={handleToggleFavorite}
               onOpenEditor={(song, tabKey) => handleOpenEditor(song, tabKey)}
             />

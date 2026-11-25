@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { base64ToBytes, parseID3TagsFromBytes } from '../utils/id3Parser';
 
 const isWeb = Platform.OS === 'web';
 const SONGS_DIR = isWeb ? '' : `${FileSystem.documentDirectory}songs/`;
@@ -158,6 +159,8 @@ export const getStoredSongs = async () => {
       lyrics: song.lyrics || '',
       notes: song.notes || '',
       coverUri: song.coverUri || null,
+      playCount: Number(song.playCount) || 0,
+      lastPlayedAt: song.lastPlayedAt || null,
     }));
   } catch (error) {
     console.error('Gagal mengambil metadata lagu:', error);
@@ -270,22 +273,61 @@ export const importSongFromDevice = async () => {
         });
       }
 
+      // Baca metadata ID3v2 (Judul, Artist, Album, Tahun, Genre, Lirik, Cover) otomatis untuk MP3
+      let id3 = {};
+      let extractedCoverUri = null;
+      try {
+        let headerBytes = null;
+        if (isWeb && asset.file && typeof asset.file.slice === 'function') {
+          const sliceBuf = await asset.file.slice(0, 524288).arrayBuffer();
+          headerBytes = new Uint8Array(sliceBuf);
+        } else if (!isWeb && ext.toLowerCase() === 'mp3') {
+          const base64Header = await FileSystem.readAsStringAsync(destinationUri, {
+            encoding: FileSystem.EncodingType.Base64,
+            position: 0,
+            length: 524288,
+          });
+          if (base64Header) {
+            headerBytes = base64ToBytes(base64Header);
+          }
+        }
+
+        if (headerBytes) {
+          id3 = parseID3TagsFromBytes(headerBytes);
+          if (id3.cover && id3.cover.base64) {
+            if (isWeb) {
+              extractedCoverUri = `data:${id3.cover.mime};base64,${id3.cover.base64}`;
+            } else {
+              const coverDest = `${COVERS_DIR}cover_${fileId}.${id3.cover.ext}`;
+              await FileSystem.writeAsStringAsync(coverDest, id3.cover.base64, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+              extractedCoverUri = coverDest;
+            }
+          }
+        }
+      } catch (id3Err) {
+        // Jika file bukan MP3 atau tidak punya ID3 tag, lanjutkan dengan nama file biasa
+      }
+
       const newSong = {
         id: fileId,
-        title,
-        artist,
-        genre: 'Pop',
-        album: 'Single',
-        year: new Date().getFullYear().toString(),
-        lyrics: '',
+        title: id3.title || title,
+        artist: id3.artist || artist,
+        genre: id3.genre || 'Pop',
+        album: id3.album || 'Single',
+        year: id3.year || new Date().getFullYear().toString(),
+        lyrics: id3.lyrics || '',
         notes: '',
-        coverUri: null,
+        coverUri: extractedCoverUri,
         filename: originalName,
         uri: destinationUri,
         size: asset.size || (asset.file ? asset.file.size : 0) || 0,
         mimeType: asset.mimeType || 'audio/mpeg',
         createdAt: new Date().toISOString(),
         duration: 0,
+        playCount: 0,
+        lastPlayedAt: null,
       };
 
       importedSongs.push(newSong);
@@ -411,5 +453,31 @@ export const toggleFavoriteSong = async (songId) => {
   } catch (error) {
     console.error('Gagal toggle favorit:', error);
     return [];
+  }
+};
+
+export const incrementSongPlayCount = async (songId) => {
+  if (!songId) return null;
+  try {
+    const songs = await getStoredSongs();
+    let changed = false;
+    const updated = songs.map((s) => {
+      if (s.id === songId) {
+        changed = true;
+        return {
+          ...s,
+          playCount: (Number(s.playCount) || 0) + 1,
+          lastPlayedAt: new Date().toISOString(),
+        };
+      }
+      return s;
+    });
+    if (changed) {
+      await saveSongsMetadata(updated);
+      return updated;
+    }
+    return null;
+  } catch (error) {
+    return null;
   }
 };

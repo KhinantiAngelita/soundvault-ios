@@ -17,6 +17,9 @@ class AudioService {
     this.sleepTimerMinutes = 0;
     this.sleepTimerRemainingSec = 0;
     this.sleepInterval = null;
+    this.abLoopA = null;
+    this.abLoopB = null;
+    this.lastAbSeekAt = 0;
     this.statusListeners = new Set();
     this.progressListeners = new Set();
     this.songChangeListeners = new Set();
@@ -78,6 +81,8 @@ class AudioService {
       playbackRate: this.playbackRate,
       sleepTimerMinutes: this.sleepTimerMinutes,
       sleepTimerRemainingSec: this.sleepTimerRemainingSec,
+      abLoopA: this.abLoopA,
+      abLoopB: this.abLoopB,
       currentIndex: this.currentIndex,
       queueLength: this.queue.length,
     };
@@ -182,6 +187,8 @@ class AudioService {
 
     try {
       this.cleanupCurrentPlayer();
+      this.abLoopA = null;
+      this.abLoopB = null;
 
       const player = createAudioPlayer(
         { uri: song.uri },
@@ -235,6 +242,20 @@ class AudioService {
     if (status.didJustFinish) {
       this.handleSongFinished();
       return;
+    }
+
+    // A-B Repeat: jika mencapai titik B, langsung ulang kembali ke titik A
+    if (
+      this.abLoopA !== null &&
+      this.abLoopB !== null &&
+      this.position >= this.abLoopB &&
+      this.player
+    ) {
+      const now = Date.now();
+      if (now - this.lastAbSeekAt > 600) {
+        this.lastAbSeekAt = now;
+        this.player.seekTo(Math.max(0, this.abLoopA / 1000)).catch(() => {});
+      }
     }
 
     // Hanya render ulang komponen utama jika status play/pause berubah
@@ -298,7 +319,62 @@ class AudioService {
     this.isPlaying = false;
     this.position = 0;
     this.duration = 0;
+    this.abLoopA = null;
+    this.abLoopB = null;
     this.notifySongChange();
+    this.notifyStatus();
+  }
+
+  async playNext(song) {
+    if (!song) return;
+    if (!this.currentSong || this.queue.length === 0) {
+      await this.playSong(song, [song], 0);
+      return;
+    }
+    if (this.currentSong.id === song.id) return;
+
+    // Hapus duplikat lagu yang sama di posisi lain dalam antrean
+    const existingIdx = this.queue.findIndex((s) => s.id === song.id);
+    if (existingIdx !== -1) {
+      this.queue.splice(existingIdx, 1);
+      if (existingIdx < this.currentIndex) {
+        this.currentIndex -= 1;
+      }
+    }
+
+    const insertIdx = Math.min(this.currentIndex + 1, this.queue.length);
+    this.queue.splice(insertIdx, 0, song);
+    this.notifyStatus();
+  }
+
+  toggleABLoop() {
+    if (!this.currentSong) return;
+    if (this.abLoopA === null) {
+      this.abLoopA = Math.max(0, this.position);
+      this.abLoopB = null;
+    } else if (this.abLoopB === null) {
+      const minB = this.abLoopA + 1000;
+      if (this.position >= minB) {
+        this.abLoopB = this.position;
+        if (this.player) {
+          this.lastAbSeekAt = Date.now();
+          this.player.seekTo(this.abLoopA / 1000).catch(() => {});
+        }
+      } else {
+        // Jika titik B terlalu dekat (<1 detik dari A), reset
+        this.abLoopA = null;
+        this.abLoopB = null;
+      }
+    } else {
+      this.abLoopA = null;
+      this.abLoopB = null;
+    }
+    this.notifyStatus();
+  }
+
+  clearABLoop() {
+    this.abLoopA = null;
+    this.abLoopB = null;
     this.notifyStatus();
   }
 

@@ -19,6 +19,7 @@ function SongItem({
   isFavorite,
   playlists = [],
   onPress,
+  onPlayNext,
   onToggleFavorite,
   onToggleSongInPlaylist,
   onCreatePlaylist,
@@ -195,6 +196,14 @@ function SongItem({
               ]}
             >
               {[
+                {
+                  label: 'Putar Berikutnya',
+                  icon: 'play-skip-forward-outline',
+                  onPress: () => {
+                    setMenuVisible(false);
+                    onPlayNext && onPlayNext(song);
+                  },
+                },
                 {
                   label: isFavorite ? 'Hapus dari Favorit' : 'Tambah ke Favorit',
                   icon: isFavorite ? 'heart-dislike-outline' : 'heart-outline',

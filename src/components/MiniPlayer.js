@@ -1,9 +1,19 @@
-import React, { useState, useEffect, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Image } from 'react-native';
+import React, { useState, useEffect, useRef, memo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+  Image,
+  Animated,
+  PanResponder,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AntigravityLogo from './AntigravityLogo';
 import { CENURA_FONT } from '../utils/theme';
 import { audioPlayer } from '../services/audioService';
+import { hapticLight } from '../utils/haptics';
 
 function MiniPlayer({
   currentSong,
@@ -12,8 +22,46 @@ function MiniPlayer({
   onPress,
   onTogglePlayPause,
   onNext,
+  onPrevious,
 }) {
   const [prog, setProg] = useState({ position: 0, duration: 0 });
+  const swipeX = useRef(new Animated.Value(0)).current;
+  const callbacksRef = useRef({ onNext, onPrevious });
+  callbacksRef.current = { onNext, onPrevious };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        Math.abs(gesture.dx) > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
+      onPanResponderMove: (_, gesture) => {
+        const clamped = Math.max(-72, Math.min(72, gesture.dx * 0.65));
+        swipeX.setValue(clamped);
+      },
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dx < -48 && callbacksRef.current.onNext) {
+          hapticLight();
+          callbacksRef.current.onNext();
+        } else if (gesture.dx > 48 && callbacksRef.current.onPrevious) {
+          hapticLight();
+          callbacksRef.current.onPrevious();
+        }
+        Animated.spring(swipeX, {
+          toValue: 0,
+          friction: 7,
+          tension: 90,
+          useNativeDriver: true,
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(swipeX, {
+          toValue: 0,
+          friction: 7,
+          tension: 90,
+          useNativeDriver: true,
+        }).start();
+      },
+    })
+  ).current;
 
   useEffect(() => {
     if (!currentSong) return;
@@ -31,24 +79,16 @@ function MiniPlayer({
   const isLight = theme.mode === 'light';
 
   return (
-    <View
+    <Animated.View
+      {...panResponder.panHandlers}
       style={[
         styles.wrapper,
         {
-          // Hanya bar MiniPlayer yang memiliki konsep Liquid Glass transparan + blur
-          backgroundColor: isLight
-            ? 'rgba(255, 255, 255, 0.52)'
-            : 'rgba(18, 23, 33, 0.56)',
-          borderColor: isLight
-            ? 'rgba(255, 255, 255, 0.85)'
-            : 'rgba(125, 211, 252, 0.25)',
+          backgroundColor: isLight ? '#FFFFFF' : '#151B26',
+          borderColor: theme.border,
+          shadowColor: isLight ? '#0F172A' : '#000000',
+          transform: [{ translateX: swipeX }],
         },
-        Platform.OS === 'web'
-          ? {
-              backdropFilter: 'blur(24px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-            }
-          : {},
       ]}
     >
       {/* Progress Bar Tipis Light Blue di Atas (Persis seperti sebelumnya) */}
@@ -109,7 +149,10 @@ function MiniPlayer({
         <View style={styles.controls}>
           <TouchableOpacity
             style={styles.controlBtn}
-            onPress={onTogglePlayPause}
+            onPress={() => {
+              hapticLight();
+              onTogglePlayPause && onTogglePlayPause();
+            }}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons
@@ -121,14 +164,17 @@ function MiniPlayer({
 
           <TouchableOpacity
             style={styles.controlBtn}
-            onPress={onNext}
+            onPress={() => {
+              hapticLight();
+              onNext && onNext();
+            }}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="play-forward" size={22} color={theme.textSecondary} />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 }
 
