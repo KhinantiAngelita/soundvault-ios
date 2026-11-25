@@ -126,7 +126,7 @@ export default function MiniPlayer({
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: 18,
+    bottom: Platform.OS === 'ios' ? 24 : 16,
     left: 16,
     right: 16,
     borderRadius: 16,

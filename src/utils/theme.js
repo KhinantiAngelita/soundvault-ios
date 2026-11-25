@@ -9,7 +9,7 @@ export const CENURA_FONT =
 export const THEMES = {
   dark: {
     mode: 'dark',
-    outerBg: '#05070A',
+    outerBg: '#0A0D12',
     bg: '#0A0D12',
     surface: '#121721',
     surfaceElevated: '#181F2C',
@@ -33,9 +33,9 @@ export const THEMES = {
   },
   light: {
     mode: 'light',
-    outerBg: '#E2E8F0',
-    bg: '#F8FAFC',
-    surface: '#FFFFFF',
+    outerBg: '#FFFFFF',
+    bg: '#FFFFFF',
+    surface: '#F8FAFC',
     surfaceElevated: '#F1F5F9',
     surfaceActive: '#E0F2FE',
     border: '#E2E8F0',

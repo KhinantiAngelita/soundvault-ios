@@ -165,7 +165,7 @@ class AudioService {
       const player = createAudioPlayer(
         { uri: song.uri },
         {
-          updateInterval: 250,
+          updateInterval: 500,
           keepAudioSessionActive: true,
         }
       );

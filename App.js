@@ -35,7 +35,6 @@ import {
 } from './src/services/storageService';
 import * as Font from 'expo-font';
 import { audioPlayer } from './src/services/audioService';
-import { generateDemoSongs } from './src/utils/demoSongs';
 import { THEMES, CENURA_FONT } from './src/utils/theme';
 import AntigravityLogo from './src/components/AntigravityLogo';
 import SongItem from './src/components/SongItem';
@@ -43,7 +42,6 @@ import MiniPlayer from './src/components/MiniPlayer';
 import PlayerModal from './src/components/PlayerModal';
 import RenameModal from './src/components/RenameModal';
 import SettingsModal from './src/components/SettingsModal';
-import SplashScreen from './src/components/SplashScreen';
 
 export default function App() {
   const [themeMode, setThemeMode] = useState('dark');
@@ -61,7 +59,6 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
 
   // Player State
   const [playerStatus, setPlayerStatus] = useState({
@@ -187,15 +184,6 @@ export default function App() {
     } finally {
       setIsImporting(false);
     }
-  };
-
-  const handleLoadDemoSongs = async () => {
-    const demoTracks = generateDemoSongs();
-    const existingIds = new Set(songs.map((s) => s.id));
-    const newTracks = demoTracks.filter((d) => !existingIds.has(d.id));
-    const updated = [...newTracks, ...songs];
-    setSongs(updated);
-    await saveSongsMetadata(updated);
   };
 
   const handlePlaySong = async (song, index, customQueue = null) => {
@@ -358,7 +346,10 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={[styles.outerBackground, { backgroundColor: theme.outerBg }]}>
+      <SafeAreaView
+        style={[styles.outerBackground, { backgroundColor: theme.bg }]}
+        edges={['top']}
+      >
         <StatusBar
           barStyle={themeMode === 'dark' ? 'light-content' : 'dark-content'}
           backgroundColor={theme.bg}
@@ -729,23 +720,6 @@ export default function App() {
                   ? `Tidak ada lagu yang cocok dengan "${searchQuery}".`
                   : 'Ketuk tombol "+" di kanan atas untuk mengimpor lagu dari perangkat Anda.'}
               </Text>
-
-              {songs.length === 0 && !searchQuery && (
-                <TouchableOpacity
-                  style={[
-                    styles.demoBtn,
-                    {
-                      backgroundColor: theme.surfaceElevated,
-                    },
-                  ]}
-                  onPress={handleLoadDemoSongs}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.demoBtnText, { color: theme.accent }]}>
-                    Muat Lagu Contoh
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
           ) : (
             <FlatList
@@ -873,13 +847,6 @@ export default function App() {
             onSelectSortOrder={handleSelectSortOrder}
             totalSongs={songs.length}
             totalBytes={totalStorageBytes}
-          />
-
-          {/* Animated Splash Screen Elegan */}
-          <SplashScreen
-            visible={showSplash}
-            theme={theme}
-            onFinish={() => setShowSplash(false)}
           />
         </View>
       </SafeAreaView>

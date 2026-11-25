@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { CENURA_FONT } from '../utils/theme';
 
-export default function SongItem({
+function SongItem({
   song,
   theme,
   isPlaying,
@@ -642,3 +642,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+export default memo(SongItem);
