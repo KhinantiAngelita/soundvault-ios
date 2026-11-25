@@ -1,0 +1,63 @@
+name: Build iOS IPA (Unsigned for Sideloadly / SideStore)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-ipa:
+    name: Build SoundVault.ipa on macOS
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Expo Prebuild (Generate Native iOS Project)
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Build iOS App (Unsigned Release for Physical iPhone)
+        run: |
+          WORKSPACE=$(ls ios/*.xcworkspace | head -n 1)
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          echo "Building Workspace: $WORKSPACE | Scheme: $SCHEME"
+
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath ios/build \
+            ARCHS="arm64" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build
+
+      - name: Package .app into SoundVault.ipa
+        run: |
+          mkdir -p Payload
+          APP_PATH=$(find ios/build/Build/Products/Release-iphoneos -name "*.app" -maxdepth 1 | head -n 1)
+          echo "Found built app at: $APP_PATH"
+          cp -R "$APP_PATH" Payload/
+          zip -r -q SoundVault.ipa Payload
+
+      - name: Upload SoundVault.ipa Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundVault-iOS-IPA
+          path: SoundVault.ipa
+          retention-days: 30
