@@ -181,7 +181,7 @@ function MiniPlayer({
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 24 : 16,
+    bottom: Platform.OS === 'ios' ? 84 : 68,
     left: 16,
     right: 16,
     borderRadius: 16,

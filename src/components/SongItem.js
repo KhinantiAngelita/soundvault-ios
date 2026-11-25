@@ -17,8 +17,12 @@ function SongItem({
   isPlaying,
   isCurrentSong,
   isFavorite,
+  isSelectionMode = false,
+  isSelected = false,
   playlists = [],
   onPress,
+  onLongPress,
+  onToggleSelect,
   onPlayNext,
   onToggleFavorite,
   onToggleSongInPlaylist,
@@ -47,9 +51,21 @@ function SongItem({
     <>
       <TouchableOpacity
         style={styles.row}
-        onPress={onPress}
+        onPress={isSelectionMode ? () => onToggleSelect && onToggleSelect(song.id) : onPress}
+        onLongPress={!isSelectionMode && onLongPress ? () => onLongPress(song.id) : undefined}
+        delayLongPress={320}
         activeOpacity={0.65}
       >
+        {isSelectionMode && (
+          <View style={{ marginRight: 11 }}>
+            <Ionicons
+              name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
+              size={22}
+              color={isSelected ? theme.accentStrong : theme.textMuted}
+            />
+          </View>
+        )}
+
         {/* Artwork Thumbnail Ala Apple Music (46x46 Rounded 9px) */}
         <View
           style={[
@@ -121,6 +137,7 @@ function SongItem({
             </Text>
           </View>
 
+          {!isSelectionMode && (
           <View style={styles.actions}>
             {isFavorite && (
               <TouchableOpacity
@@ -144,6 +161,7 @@ function SongItem({
               />
             </TouchableOpacity>
           </View>
+          )}
         </View>
       </TouchableOpacity>
 

@@ -11,6 +11,7 @@ const SONGS_METADATA_KEY = '@soundvault_songs';
 const FAVORITES_KEY = '@soundvault_favorites';
 const PLAYLISTS_KEY = '@soundvault_playlists';
 const LAST_SONG_KEY = '@soundvault_last_song_id';
+const LAST_POS_KEY = '@soundvault_last_song_pos';
 const THEME_KEY = '@soundvault_theme_mode';
 const SORT_KEY = '@soundvault_sort_order';
 
@@ -80,6 +81,23 @@ export const saveLastPlayedSongId = async (songId) => {
   }
 };
 
+export const getLastPlayedPosition = async () => {
+  try {
+    const val = await AsyncStorage.getItem(LAST_POS_KEY);
+    return val ? Math.max(0, Number(val) || 0) : 0;
+  } catch (e) {
+    return 0;
+  }
+};
+
+export const saveLastPlayedPosition = async (positionMs) => {
+  try {
+    await AsyncStorage.setItem(LAST_POS_KEY, String(Math.floor(positionMs || 0)));
+  } catch (e) {
+    // Abaikan
+  }
+};
+
 // Manajemen Custom Playlist
 export const getPlaylists = async () => {
   try {
@@ -132,6 +150,69 @@ export const toggleSongInPlaylist = async (playlistId, songId) => {
   });
   await savePlaylists(updated);
   return updated;
+};
+
+export const addSongsToPlaylist = async (playlistId, songIds = []) => {
+  const current = await getPlaylists();
+  const updated = current.map((p) => {
+    if (p.id !== playlistId) return p;
+    const merged = Array.from(new Set([...(p.songIds || []), ...songIds]));
+    return { ...p, songIds: merged };
+  });
+  await savePlaylists(updated);
+  return updated;
+};
+
+export const setPlaylistSongs = async (playlistId, songIds = []) => {
+  const current = await getPlaylists();
+  const updated = current.map((p) => {
+    if (p.id !== playlistId) return p;
+    return { ...p, songIds: Array.from(new Set(songIds)) };
+  });
+  await savePlaylists(updated);
+  return updated;
+};
+
+export const updatePlaylistInfo = async (playlistId, updates = {}) => {
+  const current = await getPlaylists();
+  const updated = current.map((p) => {
+    if (p.id !== playlistId) return p;
+    return {
+      ...p,
+      name: updates.name !== undefined ? updates.name.trim() || p.name : p.name,
+      coverUri: updates.coverUri !== undefined ? updates.coverUri : p.coverUri || null,
+    };
+  });
+  await savePlaylists(updated);
+  return updated;
+};
+
+export const addDownloadedSong = async (newSong) => {
+  const currentSongs = await getStoredSongs();
+  const updatedSongs = [newSong, ...currentSongs];
+  await saveSongsMetadata(updatedSongs);
+  return updatedSongs;
+};
+
+export const addSongsToFavorites = async (songIds = []) => {
+  try {
+    const favorites = await getFavorites();
+    const merged = Array.from(new Set([...favorites, ...songIds]));
+    await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(merged));
+    return merged;
+  } catch (e) {
+    return await getFavorites();
+  }
+};
+
+export const setFavoriteSongs = async (songIds = []) => {
+  try {
+    const clean = Array.from(new Set(songIds));
+    await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(clean));
+    return clean;
+  } catch (e) {
+    return await getFavorites();
+  }
 };
 
 const parseFilenameMetadata = (rawName) => {
@@ -266,7 +347,20 @@ export const importSongFromDevice = async () => {
       let destinationUri = asset.uri;
 
       if (!isWeb) {
-        destinationUri = `${SONGS_DIR}${fileId}.${ext}`;
+        const safeBase = originalName
+          .replace(/\.[^/.]+$/, '')
+          .replace(/[\\/:*?"<>|]/g, '')
+          .trim() || fileId;
+        let candidate = `${SONGS_DIR}${safeBase}.${ext}`;
+        try {
+          const existsInfo = await FileSystem.getInfoAsync(candidate);
+          if (existsInfo.exists) {
+            candidate = `${SONGS_DIR}${safeBase}_${fileId.slice(-4)}.${ext}`;
+          }
+        } catch (e) {
+          candidate = `${SONGS_DIR}${fileId}.${ext}`;
+        }
+        destinationUri = candidate;
         await FileSystem.copyAsync({
           from: asset.uri,
           to: destinationUri,
@@ -480,4 +574,87 @@ export const incrementSongPlayCount = async (songId) => {
   } catch (error) {
     return null;
   }
+};
+
+const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'mp4']);
+
+// Pindai folder Documents/songs (On My iPhone -> SoundVault -> songs) untuk file audio baru
+export const syncSongsFromLocalFolder = async () => {
+  if (isWeb) {
+    return { count: 0, songs: await getStoredSongs() };
+  }
+  await ensureDirectoryExists();
+  const currentSongs = await getStoredSongs();
+  const existingUris = new Set(currentSongs.map((s) => s.uri));
+  const files = await FileSystem.readDirectoryAsync(SONGS_DIR);
+
+  const newlyFound = [];
+  for (const filename of files) {
+    const ext = (filename.split('.').pop() || '').toLowerCase();
+    if (!AUDIO_EXTENSIONS.has(ext)) continue;
+
+    const fullUri = `${SONGS_DIR}${filename}`;
+    if (existingUris.has(fullUri)) continue;
+
+    const fileId = `sync_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const { title, artist } = parseFilenameMetadata(filename);
+    let size = 0;
+    try {
+      const info = await FileSystem.getInfoAsync(fullUri);
+      if (info.exists && info.size) size = info.size;
+    } catch (e) {
+      // Abaikan
+    }
+
+    let id3 = {};
+    let extractedCoverUri = null;
+    if (ext === 'mp3') {
+      try {
+        const base64Header = await FileSystem.readAsStringAsync(fullUri, {
+          encoding: FileSystem.EncodingType.Base64,
+          position: 0,
+          length: 524288,
+        });
+        if (base64Header) {
+          id3 = parseID3TagsFromBytes(base64ToBytes(base64Header));
+          if (id3.cover && id3.cover.base64) {
+            const coverDest = `${COVERS_DIR}cover_${fileId}.${id3.cover.ext}`;
+            await FileSystem.writeAsStringAsync(coverDest, id3.cover.base64, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            extractedCoverUri = coverDest;
+          }
+        }
+      } catch (e) {
+        // Abaikan jika gagal parse ID3
+      }
+    }
+
+    newlyFound.push({
+      id: fileId,
+      title: id3.title || title,
+      artist: id3.artist || artist,
+      genre: id3.genre || 'Pop',
+      album: id3.album || 'Single',
+      year: id3.year || new Date().getFullYear().toString(),
+      lyrics: id3.lyrics || '',
+      notes: '',
+      coverUri: extractedCoverUri,
+      filename,
+      uri: fullUri,
+      size,
+      mimeType: ext === 'm4a' ? 'audio/mp4' : 'audio/mpeg',
+      createdAt: new Date().toISOString(),
+      duration: 0,
+      playCount: 0,
+      lastPlayedAt: null,
+    });
+  }
+
+  if (newlyFound.length > 0) {
+    const updated = [...newlyFound, ...currentSongs];
+    await saveSongsMetadata(updated);
+    return { count: newlyFound.length, songs: updated };
+  }
+  return { count: 0, songs: currentSongs };
 };

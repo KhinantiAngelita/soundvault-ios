@@ -1,4 +1,5 @@
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { saveLastPlayedPosition } from './storageService';
 
 class AudioService {
   constructor() {
@@ -20,6 +21,8 @@ class AudioService {
     this.abLoopA = null;
     this.abLoopB = null;
     this.lastAbSeekAt = 0;
+    this.lastPosSavedAt = 0;
+    this.pendingResumePositionMs = 0;
     this.statusListeners = new Set();
     this.progressListeners = new Set();
     this.songChangeListeners = new Set();
@@ -139,13 +142,14 @@ class AudioService {
     this.currentIndex = startIndex;
   }
 
-  preloadSong(song, queue = []) {
+  preloadSong(song, queue = [], savedPositionMs = 0) {
     if (!song) return;
     this.currentSong = song;
     this.queue = [...queue];
     this.currentIndex = this.queue.findIndex((s) => s.id === song.id);
     this.duration = song.duration || 0;
-    this.position = 0;
+    this.position = savedPositionMs || 0;
+    this.pendingResumePositionMs = savedPositionMs || 0;
     this.isPlaying = false;
     this.notifyStatus();
   }
@@ -218,6 +222,19 @@ class AudioService {
       this.updateLockScreenAndMediaSession(song);
       player.play();
 
+      // Jika ada posisi resume tersimpan, lompat langsung ke detik terakhir tersebut
+      if (this.pendingResumePositionMs > 1500) {
+        const resumeSec = this.pendingResumePositionMs / 1000;
+        this.pendingResumePositionMs = 0;
+        setTimeout(() => {
+          if (this.player === player) {
+            player.seekTo(resumeSec).catch(() => {});
+          }
+        }, 250);
+      } else {
+        this.pendingResumePositionMs = 0;
+      }
+
       this.isPlaying = true;
       this.notifySongChange();
       this.notifyStatus();
@@ -255,6 +272,15 @@ class AudioService {
       if (now - this.lastAbSeekAt > 600) {
         this.lastAbSeekAt = now;
         this.player.seekTo(Math.max(0, this.abLoopA / 1000)).catch(() => {});
+      }
+    }
+
+    // Simpan posisi detik terakhir tiap ~5 detik agar bisa lanjut saat aplikasi dibuka lagi
+    if (this.isPlaying && this.position > 0) {
+      const now = Date.now();
+      if (now - this.lastPosSavedAt > 5000) {
+        this.lastPosSavedAt = now;
+        saveLastPlayedPosition(this.position);
       }
     }
 
@@ -296,6 +322,7 @@ class AudioService {
     if (this.isPlaying) {
       this.player.pause();
       this.isPlaying = false;
+      saveLastPlayedPosition(this.position);
     } else {
       this.player.play();
       this.isPlaying = true;
@@ -382,9 +409,12 @@ class AudioService {
     const idx = this.queue.findIndex((s) => s.id === songId);
     if (idx !== -1) {
       this.queue.splice(idx, 1);
-      if (this.currentIndex >= this.queue.length) {
+      if (idx < this.currentIndex) {
+        this.currentIndex = Math.max(0, this.currentIndex - 1);
+      } else if (this.currentIndex >= this.queue.length) {
         this.currentIndex = Math.max(0, this.queue.length - 1);
       }
+      this.notifyStatus();
     }
   }
 

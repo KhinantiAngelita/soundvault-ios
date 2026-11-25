@@ -48,6 +48,7 @@ export default function SettingsModal({
   onSelectSortOrder,
   totalSongs = 0,
   totalBytes = 0,
+  onSyncFolder,
 }) {
   return (
     <Modal
@@ -220,7 +221,15 @@ export default function SettingsModal({
                   color={theme.textSecondary}
                 />
               </View>
-              <View style={styles.rowContentWrap}>
+              <View
+                style={[
+                  styles.rowContentWrap,
+                  onSyncFolder && {
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: theme.border,
+                  },
+                ]}
+              >
                 <Text style={[styles.groupRowTitle, { color: theme.text }]}>
                   Penyimpanan Lokal
                 </Text>
@@ -229,6 +238,28 @@ export default function SettingsModal({
                 </Text>
               </View>
             </View>
+
+            {onSyncFolder && (
+              <TouchableOpacity
+                style={styles.groupRow}
+                onPress={onSyncFolder}
+                activeOpacity={0.7}
+              >
+                <View style={styles.leadingIconWrap}>
+                  <Ionicons
+                    name="sync-outline"
+                    size={18}
+                    color={theme.accent}
+                  />
+                </View>
+                <View style={styles.rowContentWrap}>
+                  <Text style={[styles.groupRowTitle, { color: theme.accent, fontWeight: '500' }]}>
+                    Sinkronkan Folder On My iPhone
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
         </TouchableOpacity>
       </TouchableOpacity>

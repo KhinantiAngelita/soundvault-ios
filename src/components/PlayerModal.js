@@ -56,6 +56,7 @@ export default function PlayerModal({
   onSetSleepTimer,
   onToggleABLoop,
   onSelectQueueSong,
+  onRemoveFromQueue,
   onToggleFavorite,
   onOpenEditor,
 }) {
@@ -405,7 +406,7 @@ export default function PlayerModal({
                           {track.artist || 'Unknown Artist'}
                         </Text>
                       </View>
-                      {isCurrent && (
+                      {isCurrent ? (
                         <View
                           style={[
                             styles.nowPlayingPill,
@@ -416,6 +417,23 @@ export default function PlayerModal({
                             Aktif
                           </Text>
                         </View>
+                      ) : (
+                        onRemoveFromQueue && (
+                          <TouchableOpacity
+                            onPress={() => {
+                              hapticLight();
+                              onRemoveFromQueue(track.id);
+                            }}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            style={{ padding: 4 }}
+                          >
+                            <Ionicons
+                              name="close-outline"
+                              size={18}
+                              color={theme.textMuted}
+                            />
+                          </TouchableOpacity>
+                        )
                       )}
                     </TouchableOpacity>
                   );
@@ -684,6 +702,32 @@ export default function PlayerModal({
             <Text style={[styles.timeText, { color: theme.textMuted }]}>
               {formatTime(currentPos)}
             </Text>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  hapticSelection();
+                  onSeek && onSeek(Math.max(0, currentPos - 10000));
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[styles.timeText, { color: theme.accent, fontWeight: '600' }]}>
+                  −10d
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  hapticSelection();
+                  onSeek && onSeek(Math.min(maxDuration, currentPos + 10000));
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[styles.timeText, { color: theme.accent, fontWeight: '600' }]}>
+                  +10d
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             <Text style={[styles.timeText, { color: theme.textMuted }]}>
               {formatTime(liveProgress.duration)}
             </Text>
