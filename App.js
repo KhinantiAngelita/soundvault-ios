@@ -80,7 +80,14 @@ export default function App() {
 
   const handleOpenEditor = (song, tabKey = 'info') => {
     setEditorInitialTab(tabKey);
-    setSongToEdit(song);
+    if (isPlayerModalVisible) {
+      setIsPlayerModalVisible(false);
+      setTimeout(() => {
+        setSongToEdit(song);
+      }, 350);
+    } else {
+      setSongToEdit(song);
+    }
   };
 
   useEffect(() => {
@@ -222,11 +229,22 @@ export default function App() {
 
   const handleDeleteSong = async (songId) => {
     try {
-      if (playerStatus.currentSong?.id === songId) {
-        await audioPlayer.nextSong();
-      }
       const updated = await deleteSong(songId);
       setSongs(updated);
+      const updatedPlaylists = await getPlaylists();
+      setPlaylists(updatedPlaylists);
+
+      if (playerStatus.currentSong?.id === songId) {
+        audioPlayer.removeSongFromQueue(songId);
+        if (updated.length > 0 && audioPlayer.queue.length > 0) {
+          await audioPlayer.nextSong();
+        } else {
+          audioPlayer.stopAndClear();
+          setIsPlayerModalVisible(false);
+        }
+      } else {
+        audioPlayer.removeSongFromQueue(songId);
+      }
     } catch (err) {
       Alert.alert('Error', 'Gagal menghapus lagu.');
     }
@@ -236,15 +254,7 @@ export default function App() {
     try {
       const updated = await updateSongMetadata(songId, updates);
       setSongs(updated);
-      if (playerStatus.currentSong?.id === songId) {
-        setPlayerStatus((prev) => ({
-          ...prev,
-          currentSong: {
-            ...prev.currentSong,
-            ...updates,
-          },
-        }));
-      }
+      audioPlayer.updateSongInMemory(songId, updates);
     } catch (err) {
       Alert.alert('Error', 'Gagal menyimpan perubahan info lagu.');
     }
@@ -345,6 +355,23 @@ export default function App() {
     if (tabKey !== 'genres') setSelectedGenre(null);
     if (tabKey !== 'playlists') setSelectedPlaylistId(null);
   };
+
+  // Halaman Splash Screen Tersendiri (Terpisah Penuh dari Landing Page)
+  if (showSplash) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar
+          barStyle={themeMode === 'dark' ? 'light-content' : 'dark-content'}
+          backgroundColor={theme.bg}
+        />
+        <SplashScreen
+          visible={showSplash}
+          theme={theme}
+          onFinish={() => setShowSplash(false)}
+        />
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>
@@ -852,15 +879,6 @@ export default function App() {
           />
         </View>
       </SafeAreaView>
-
-      {/* Animated Splash Screen Elegan Edge-to-Edge pada Awal Buka Aplikasi */}
-      {showSplash && (
-        <SplashScreen
-          visible={showSplash}
-          theme={theme}
-          onFinish={() => setShowSplash(false)}
-        />
-      )}
     </SafeAreaProvider>
   );
 }

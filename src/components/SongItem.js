@@ -207,7 +207,7 @@ function SongItem({
                   icon: 'list-outline',
                   onPress: () => {
                     setMenuVisible(false);
-                    setPlaylistModalVisible(true);
+                    setTimeout(() => setPlaylistModalVisible(true), 280);
                   },
                 },
                 {
@@ -215,7 +215,7 @@ function SongItem({
                   icon: 'create-outline',
                   onPress: () => {
                     setMenuVisible(false);
-                    onEdit(song, 'info');
+                    setTimeout(() => onEdit(song, 'info'), 280);
                   },
                 },
                 {
@@ -223,7 +223,7 @@ function SongItem({
                   icon: 'image-outline',
                   onPress: () => {
                     setMenuVisible(false);
-                    onEdit(song, 'cover');
+                    setTimeout(() => onEdit(song, 'cover'), 280);
                   },
                 },
                 {
@@ -231,7 +231,7 @@ function SongItem({
                   icon: 'document-text-outline',
                   onPress: () => {
                     setMenuVisible(false);
-                    onEdit(song, 'lyrics');
+                    setTimeout(() => onEdit(song, 'lyrics'), 280);
                   },
                 },
                 {
@@ -239,7 +239,7 @@ function SongItem({
                   icon: 'information-circle-outline',
                   onPress: () => {
                     setMenuVisible(false);
-                    onEdit(song, 'details');
+                    setTimeout(() => onEdit(song, 'details'), 280);
                   },
                 },
               ].map((item, idx, arr) => (
@@ -273,7 +273,7 @@ function SongItem({
               ]}
               onPress={() => {
                 setMenuVisible(false);
-                setConfirmDeleteVisible(true);
+                setTimeout(() => setConfirmDeleteVisible(true), 280);
               }}
             >
               <Text style={[styles.sheetOptionText, { color: theme.danger }]}>

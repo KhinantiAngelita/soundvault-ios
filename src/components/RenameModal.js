@@ -9,6 +9,8 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { GENRE_LIST, CENURA_FONT } from '../utils/theme';
 import { formatFileSize } from '../utils/formatters';
@@ -104,7 +106,10 @@ export default function RenameModal({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={[styles.overlay, { backgroundColor: theme.overlay }]}>
+      <KeyboardAvoidingView
+        style={[styles.overlay, { backgroundColor: theme.overlay }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <View
           style={[
             styles.card,
@@ -442,7 +447,7 @@ export default function RenameModal({
             )}
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

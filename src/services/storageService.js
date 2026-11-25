@@ -304,10 +304,14 @@ export const deleteSong = async (songId) => {
     const targetSong = songs.find((s) => s.id === songId);
 
     if (!isWeb && targetSong) {
-      if (targetSong.uri) {
-        const fileInfo = await FileSystem.getInfoAsync(targetSong.uri);
-        if (fileInfo.exists) {
-          await FileSystem.deleteAsync(targetSong.uri, { idempotent: true });
+      if (targetSong.uri && targetSong.uri.startsWith('file://')) {
+        try {
+          const fileInfo = await FileSystem.getInfoAsync(targetSong.uri);
+          if (fileInfo.exists) {
+            await FileSystem.deleteAsync(targetSong.uri, { idempotent: true });
+          }
+        } catch (e) {
+          // Abaikan jika file sudah tidak ada
         }
       }
       if (targetSong.coverUri) {
@@ -321,6 +325,13 @@ export const deleteSong = async (songId) => {
     const favorites = await getFavorites();
     const updatedFavorites = favorites.filter((id) => id !== songId);
     await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(updatedFavorites));
+
+    const playlists = await getPlaylists();
+    const updatedPlaylists = playlists.map((pl) => ({
+      ...pl,
+      songIds: (pl.songIds || []).filter((id) => id !== songId),
+    }));
+    await savePlaylists(updatedPlaylists);
 
     return updatedSongs;
   } catch (error) {

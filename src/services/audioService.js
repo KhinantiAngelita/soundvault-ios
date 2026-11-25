@@ -263,6 +263,39 @@ class AudioService {
     }
   }
 
+  stopAndClear() {
+    this.cleanupCurrentPlayer();
+    this.currentSong = null;
+    this.queue = [];
+    this.currentIndex = -1;
+    this.isPlaying = false;
+    this.position = 0;
+    this.duration = 0;
+    this.notifySongChange();
+    this.notifyStatus();
+  }
+
+  removeSongFromQueue(songId) {
+    const idx = this.queue.findIndex((s) => s.id === songId);
+    if (idx !== -1) {
+      this.queue.splice(idx, 1);
+      if (this.currentIndex >= this.queue.length) {
+        this.currentIndex = Math.max(0, this.queue.length - 1);
+      }
+    }
+  }
+
+  updateSongInMemory(songId, updates) {
+    this.queue = this.queue.map((s) =>
+      s.id === songId ? { ...s, ...updates } : s
+    );
+    if (this.currentSong && this.currentSong.id === songId) {
+      this.currentSong = { ...this.currentSong, ...updates };
+      this.updateLockScreenAndMediaSession(this.currentSong);
+      this.notifyStatus();
+    }
+  }
+
   async seekTo(positionMillis) {
     if (!this.player) return;
     try {
@@ -280,7 +313,15 @@ class AudioService {
     let nextIndex = this.currentIndex + 1;
 
     if (this.isShuffle) {
-      nextIndex = Math.floor(Math.random() * this.queue.length);
+      if (this.queue.length > 1) {
+        let randIdx = this.currentIndex;
+        while (randIdx === this.currentIndex) {
+          randIdx = Math.floor(Math.random() * this.queue.length);
+        }
+        nextIndex = randIdx;
+      } else {
+        nextIndex = 0;
+      }
     } else if (nextIndex >= this.queue.length) {
       if (this.repeatMode === 'all' || manual) {
         nextIndex = 0;
