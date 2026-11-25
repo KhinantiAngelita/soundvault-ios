@@ -68,6 +68,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
+  const [fontsLoaded, setFontsLoaded] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
   // Player State
@@ -99,10 +100,12 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Load font geometris bergaya Cenura untuk iOS Native & Web
+    // Load font geometris bergaya Cenura sebelum animasi Splash Screen dimulai
     Font.loadAsync({
       CenuraGeometric: require('./assets/fonts/CenuraGeometric.ttf'),
-    }).catch(() => {});
+    })
+      .catch(() => {})
+      .finally(() => setFontsLoaded(true));
 
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       if (!document.getElementById('cenura-font-link')) {
@@ -363,6 +366,19 @@ export default function App() {
     if (tabKey !== 'genres') setSelectedGenre(null);
     if (tabKey !== 'playlists') setSelectedPlaylistId(null);
   };
+
+  // Tunggu font Cenura selesai dimuat agar tidak ada perubahan/kedipan font di Splash Screen
+  if (!fontsLoaded) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar
+          barStyle={resolvedThemeMode === 'dark' ? 'light-content' : 'dark-content'}
+          backgroundColor={theme.bg}
+        />
+        <View style={{ flex: 1, backgroundColor: theme.bg }} />
+      </SafeAreaProvider>
+    );
+  }
 
   // Halaman Splash Screen Tersendiri (Terpisah Penuh dari Landing Page)
   if (showSplash) {
