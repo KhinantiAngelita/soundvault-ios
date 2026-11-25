@@ -28,11 +28,14 @@ export const extractYouTubeVideoId = (rawUrl) => {
   if (!rawUrl || typeof rawUrl !== 'string') return null;
   const trimmed = rawUrl.trim();
   const patterns = [
-    /(?:youtube\.com\/watch\?.*v=)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/watch\?(?:.*&)?v=)([a-zA-Z0-9_-]{11})/,
+    /(?:m\.youtube\.com\/watch\?(?:.*&)?v=)([a-zA-Z0-9_-]{11})/,
+    /(?:music\.youtube\.com\/watch\?(?:.*&)?v=)([a-zA-Z0-9_-]{11})/,
     /(?:youtu\.be\/)([a-zA-Z0-9_-]{11})/,
     /(?:youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-    /(?:music\.youtube\.com\/watch\?.*v=)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/,
     /(?:youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/,
   ];
   for (const regex of patterns) {
     const match = trimmed.match(regex);
@@ -102,8 +105,90 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = 12000) => {
   }
 };
 
+const resolveViaInnerTube = async (videoId, onStatus) => {
+  if (isWeb) return null;
+  const clients = [
+    {
+      clientName: 'ANDROID_VR',
+      clientVersion: '1.60.19',
+      deviceMake: 'Oculus',
+      deviceModel: 'Quest 3',
+      osName: 'Android',
+      osVersion: '12L',
+      userAgent: 'com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
+    },
+    {
+      clientName: 'IOS',
+      clientVersion: '19.45.4',
+      deviceMake: 'Apple',
+      deviceModel: 'iPhone14,3',
+      osName: 'iPhone',
+      osVersion: '18.1.0.22B83',
+      userAgent: 'com.google.ios.youtube/19.45.4 (iPhone14,3; U; CPU iOS 18_1 like Mac OS X)',
+    },
+  ];
+
+  for (const c of clients) {
+    try {
+      onStatus && onStatus('Mengambil audio langsung dari YouTube...');
+      const resp = await fetchWithTimeout(
+        'https://www.youtube.com/youtubei/v1/player?prettyPrint=false',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': c.userAgent,
+          },
+          body: JSON.stringify({
+            videoId,
+            contentCheckOk: true,
+            racyCheckOk: true,
+            context: {
+              client: {
+                clientName: c.clientName,
+                clientVersion: c.clientVersion,
+                deviceMake: c.deviceMake,
+                deviceModel: c.deviceModel,
+                osName: c.osName,
+                osVersion: c.osVersion,
+                hl: 'en',
+                gl: 'US',
+              },
+            },
+          }),
+        },
+        12000
+      );
+
+      if (resp.ok) {
+        const json = await resp.json();
+        const formats = json?.streamingData?.adaptiveFormats || [];
+        // Pilih audio/mp4 (AAC/M4A) bitrate tertinggi (itag 140/141) — 100% native iOS AVPlayer
+        const mp4Audio = formats
+          .filter((f) => f.url && (f.mimeType || '').startsWith('audio/mp4'))
+          .sort((a, b) => (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0));
+
+        if (mp4Audio[0] && mp4Audio[0].url) {
+          return {
+            url: mp4Audio[0].url,
+            ext: 'm4a',
+            mimeType: 'audio/mp4',
+          };
+        }
+      }
+    } catch (e) {
+      // Lanjut ke client berikutnya
+    }
+  }
+  return null;
+};
+
 const resolveAudioStreamUrl = async (videoId, canonicalUrl, onStatus) => {
-  // 1. Coba Cobalt API (langsung MP3)
+  // 1. Direct YouTube InnerTube API (langsung dari iPhone, paling cepat & tanpa limit server pihak ketiga)
+  const direct = await resolveViaInnerTube(videoId, onStatus);
+  if (direct) return direct;
+
+  // 2. Fallback: Cobalt API (langsung MP3)
   for (const base of COBALT_INSTANCES) {
     try {
       onStatus && onStatus('Menghubungkan ke server konversi MP3...');

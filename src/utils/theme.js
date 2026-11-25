@@ -50,10 +50,10 @@ export const THEMES = {
     accentBorder: 'rgba(56, 189, 248, 0.45)',
     danger: '#E11D48',
     overlay: 'rgba(15, 23, 42, 0.45)',
-    vinylDisc: '#1E293B',
-    vinylBorder: '#334155',
-    vinylGroove: '#283548',
-    vinylCenter: '#0F172A',
+    vinylDisc: '#FFFFFF',
+    vinylBorder: '#E2E8F0',
+    vinylGroove: '#EEF2F6',
+    vinylCenter: '#F8FAFC',
   },
 };
 

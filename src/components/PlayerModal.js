@@ -19,7 +19,8 @@ import { audioPlayer } from '../services/audioService';
 import { hapticLight, hapticSelection } from '../utils/haptics';
 
 const { width } = Dimensions.get('window');
-const DISC_SIZE = Math.min(width * 0.62, 234);
+const DISC_SIZE = Math.min(width * 0.62, 238);
+const COVER_SIZE = Math.min(width - 48, 316);
 
 const SLEEP_OPTIONS = [
   { label: 'Off', minutes: 0 },
@@ -182,14 +183,25 @@ export default function PlayerModal({
         <View style={styles.middleContentArea}>
           {viewMode === 'cover' && (
             <View style={styles.coverViewWrapper}>
-              <View style={[styles.vinylShadow, { shadowColor: theme.accentStrong }]}>
+              <View
+                style={[
+                  styles.vinylShadow,
+                  {
+                    shadowColor: hasCover
+                      ? '#000000'
+                      : theme.mode === 'light'
+                      ? '#0F172A'
+                      : theme.accentStrong,
+                    shadowOpacity: hasCover ? 0.26 : theme.mode === 'light' ? 0.12 : 0.24,
+                  },
+                ]}
+              >
                 {hasCover ? (
                   <View
                     style={[
                       styles.customCoverFrame,
                       {
-                        borderColor: theme.accentBorder,
-                        backgroundColor: theme.surface,
+                        backgroundColor: theme.surfaceElevated,
                       },
                     ]}
                   >
@@ -229,45 +241,6 @@ export default function PlayerModal({
                     </View>
                   </View>
                 )}
-              </View>
-
-              {/* Tombol Cepat Kelola Cover & Lirik */}
-              <View style={styles.quickCoverActions}>
-                <TouchableOpacity
-                  style={[
-                    styles.quickChipBtn,
-                    {
-                      backgroundColor: theme.surface,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                  onPress={() => onOpenEditor && onOpenEditor(currentSong, 'cover')}
-                >
-                  <Ionicons name="image-outline" size={13.5} color={theme.accent} />
-                  <Text style={[styles.quickChipText, { color: theme.textSecondary }]}>
-                    {hasCover ? 'Ganti / Hapus Cover' : 'Tambah Cover'}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.quickChipBtn,
-                    {
-                      backgroundColor: hasLyrics ? theme.accentSoft : theme.surface,
-                      borderColor: hasLyrics ? theme.accentBorder : theme.border,
-                    },
-                  ]}
-                  onPress={() => setViewMode('lyrics')}
-                >
-                  <Ionicons
-                    name="document-text-outline"
-                    size={13.5}
-                    color={theme.accent}
-                  />
-                  <Text style={[styles.quickChipText, { color: theme.accent }]}>
-                    {hasLyrics ? 'Lihat Lyrics' : '+ Tambah Lyrics'}
-                  </Text>
-                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -869,16 +842,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   vinylShadow: {
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.28,
-    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.24,
+    shadowRadius: 28,
     elevation: 16,
   },
   customCoverFrame: {
-    width: DISC_SIZE,
-    height: DISC_SIZE,
-    borderRadius: 28,
-    borderWidth: 2,
+    width: COVER_SIZE,
+    height: COVER_SIZE,
+    borderRadius: 16,
+    borderWidth: 0,
     overflow: 'hidden',
   },
   customCoverImg: {
