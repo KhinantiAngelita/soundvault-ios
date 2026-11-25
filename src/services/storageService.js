@@ -7,8 +7,8 @@ const isWeb = Platform.OS === 'web';
 const SONGS_DIR = isWeb ? '' : `${FileSystem.documentDirectory}songs/`;
 const SONGS_METADATA_KEY = '@soundvault_songs';
 const FAVORITES_KEY = '@soundvault_favorites';
+const THEME_KEY = '@soundvault_theme_mode';
 
-// Memastikan folder penyimpanan lokal ada (khusus iOS/Android native)
 export const ensureDirectoryExists = async () => {
   if (isWeb) return;
   const dirInfo = await FileSystem.getInfoAsync(SONGS_DIR);
@@ -17,18 +17,52 @@ export const ensureDirectoryExists = async () => {
   }
 };
 
-// Ambil semua metadata lagu yang tersimpan
+export const getSavedThemeMode = async () => {
+  try {
+    const mode = await AsyncStorage.getItem(THEME_KEY);
+    return mode === 'light' ? 'light' : 'dark';
+  } catch (e) {
+    return 'dark';
+  }
+};
+
+export const saveThemeMode = async (mode) => {
+  try {
+    await AsyncStorage.setItem(THEME_KEY, mode);
+  } catch (e) {
+    console.error('Gagal menyimpan tema:', e);
+  }
+};
+
+// Otomatis memisahkan "Artist - Judul Lagu" dari nama file jika ada tanda " - "
+const parseFilenameMetadata = (rawName) => {
+  const withoutExt = rawName.replace(/\.[^/.]+$/, '').trim();
+  if (withoutExt.includes(' - ')) {
+    const parts = withoutExt.split(' - ');
+    const artist = parts[0].trim() || 'Unknown Artist';
+    const title = parts.slice(1).join(' - ').trim() || withoutExt;
+    return { title, artist };
+  }
+  return { title: withoutExt, artist: 'Unknown Artist' };
+};
+
 export const getStoredSongs = async () => {
   try {
     const json = await AsyncStorage.getItem(SONGS_METADATA_KEY);
-    return json ? JSON.parse(json) : [];
+    if (!json) return [];
+    const parsed = JSON.parse(json);
+    // Pastikan lagu lama tetap memiliki field artist & genre default
+    return parsed.map((song) => ({
+      ...song,
+      artist: song.artist || 'Unknown Artist',
+      genre: song.genre || 'Pop',
+    }));
   } catch (error) {
     console.error('Gagal mengambil metadata lagu:', error);
     return [];
   }
 };
 
-// Simpan metadata lagu
 export const saveSongsMetadata = async (songs) => {
   try {
     await AsyncStorage.setItem(SONGS_METADATA_KEY, JSON.stringify(songs));
@@ -37,7 +71,6 @@ export const saveSongsMetadata = async (songs) => {
   }
 };
 
-// Import lagu dari File Picker iOS (aplikasi Files / iCloud) atau File Explorer PC (saat preview di Web/VS Code)
 export const importSongFromDevice = async () => {
   try {
     await ensureDirectoryExists();
@@ -57,7 +90,7 @@ export const importSongFromDevice = async () => {
 
     for (const asset of result.assets) {
       const originalName = asset.name || 'Unknown Song.mp3';
-      const cleanTitle = originalName.replace(/\.[^/.]+$/, ''); // Hapus ekstensi
+      const { title, artist } = parseFilenameMetadata(originalName);
       const ext = originalName.split('.').pop() || 'mp3';
       const fileId = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
@@ -65,7 +98,6 @@ export const importSongFromDevice = async () => {
 
       if (!isWeb) {
         destinationUri = `${SONGS_DIR}${fileId}.${ext}`;
-        // Salin file dari cache ke direktori permanen aplikasi iOS
         await FileSystem.copyAsync({
           from: asset.uri,
           to: destinationUri,
@@ -74,7 +106,9 @@ export const importSongFromDevice = async () => {
 
       const newSong = {
         id: fileId,
-        title: cleanTitle,
+        title,
+        artist,
+        genre: 'Pop',
         filename: originalName,
         uri: destinationUri,
         size: asset.size || (asset.file ? asset.file.size : 0) || 0,
@@ -96,7 +130,6 @@ export const importSongFromDevice = async () => {
   }
 };
 
-// Hapus file lagu dari penyimpanan permanen & metadata
 export const deleteSong = async (songId) => {
   try {
     const songs = await getStoredSongs();
@@ -112,7 +145,6 @@ export const deleteSong = async (songId) => {
     const updatedSongs = songs.filter((s) => s.id !== songId);
     await saveSongsMetadata(updatedSongs);
 
-    // Hapus juga dari favorit jika ada
     const favorites = await getFavorites();
     const updatedFavorites = favorites.filter((id) => id !== songId);
     await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(updatedFavorites));
@@ -124,25 +156,29 @@ export const deleteSong = async (songId) => {
   }
 };
 
-// Ubah judul lagu
-export const renameSongTitle = async (songId, newTitle) => {
+// Update metadata lagu (Judul, Artist, Genre)
+export const updateSongMetadata = async (songId, updates) => {
   try {
     const songs = await getStoredSongs();
     const updatedSongs = songs.map((s) => {
       if (s.id === songId) {
-        return { ...s, title: newTitle.trim() };
+        return {
+          ...s,
+          title: updates.title?.trim() || s.title,
+          artist: updates.artist?.trim() || 'Unknown Artist',
+          genre: updates.genre?.trim() || 'Lainnya',
+        };
       }
       return s;
     });
     await saveSongsMetadata(updatedSongs);
     return updatedSongs;
   } catch (error) {
-    console.error('Gagal mengganti nama lagu:', error);
+    console.error('Gagal memperbarui metadata lagu:', error);
     throw error;
   }
 };
 
-// Ambil ID lagu favorit
 export const getFavorites = async () => {
   try {
     const json = await AsyncStorage.getItem(FAVORITES_KEY);
@@ -152,7 +188,6 @@ export const getFavorites = async () => {
   }
 };
 
-// Toggle status favorit
 export const toggleFavoriteSong = async (songId) => {
   try {
     const favorites = await getFavorites();

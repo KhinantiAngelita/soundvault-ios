@@ -11,14 +11,13 @@ const createToneWavDataUri = (frequencies, durationSec = 12) => {
     }
   };
 
-  // WAV Header
   writeString(0, 'RIFF');
   view.setUint32(4, 36 + numSamples * 2, true);
   writeString(8, 'WAVE');
   writeString(12, 'fmt ');
   view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, 1, true); // Mono
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
   view.setUint32(24, sampleRate, true);
   view.setUint32(28, sampleRate * 2, true);
   view.setUint16(32, 2, true);
@@ -39,7 +38,6 @@ const createToneWavDataUri = (frequencies, durationSec = 12) => {
     view.setInt16(44 + i * 2, sample * 32767, true);
   }
 
-  // Konversi ArrayBuffer ke Base64
   const bytes = new Uint8Array(buffer);
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   let base64 = '';
@@ -59,8 +57,10 @@ const createToneWavDataUri = (frequencies, durationSec = 12) => {
 export const generateDemoSongs = () => [
   {
     id: 'demo_1',
-    title: 'Midnight Lo-Fi Chill (Demo Track)',
-    filename: 'Midnight_LoFi_Chill.wav',
+    title: 'Zero Gravity Drift',
+    artist: 'Antigravity Lab',
+    genre: 'Lo-Fi',
+    filename: 'Antigravity Lab - Zero Gravity Drift.wav',
     uri: createToneWavDataUri([261.63, 329.63, 392.0, 493.88, 392.0, 329.63], 10),
     size: 3420500,
     mimeType: 'audio/wav',
@@ -69,8 +69,10 @@ export const generateDemoSongs = () => [
   },
   {
     id: 'demo_2',
-    title: 'Sunset Acoustic Breeze (Demo Track)',
-    filename: 'Sunset_Acoustic_Breeze.wav',
+    title: 'Skyline Reverie',
+    artist: 'Aether Pulse',
+    genre: 'Electronic',
+    filename: 'Aether Pulse - Skyline Reverie.wav',
     uri: createToneWavDataUri([293.66, 369.99, 440.0, 587.33, 440.0, 369.99], 10),
     size: 4180200,
     mimeType: 'audio/wav',
@@ -79,10 +81,24 @@ export const generateDemoSongs = () => [
   },
   {
     id: 'demo_3',
-    title: 'Cyberpunk Night Drive (Demo Track)',
-    filename: 'Cyberpunk_Night_Drive.wav',
+    title: 'Blue Horizon Sessions',
+    artist: 'Antigravity Lab',
+    genre: 'Acoustic',
+    filename: 'Antigravity Lab - Blue Horizon Sessions.wav',
     uri: createToneWavDataUri([220.0, 261.63, 329.63, 440.0, 392.0, 329.63], 10),
     size: 5120000,
+    mimeType: 'audio/wav',
+    createdAt: new Date().toISOString(),
+    duration: 10000,
+  },
+  {
+    id: 'demo_4',
+    title: 'Velvet Starlight',
+    artist: 'Lumina Sol',
+    genre: 'R&B',
+    filename: 'Lumina Sol - Velvet Starlight.wav',
+    uri: createToneWavDataUri([329.63, 392.0, 493.88, 587.33, 493.88, 392.0], 10),
+    size: 3890000,
     mimeType: 'audio/wav',
     createdAt: new Date().toISOString(),
     duration: 10000,

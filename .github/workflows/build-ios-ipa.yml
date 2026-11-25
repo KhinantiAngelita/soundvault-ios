@@ -26,10 +26,26 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Install Dependencies
+      - name: Install Dependencies & Patch Swift 6.2 Region Isolation
         run: |
           npm install
-          sed -i '' 's/swiftLanguageModes: \[.v6\]/swiftLanguageModes: [.v5]/g' node_modules/expo-modules-jsi/apple/Package.swift
+          node -e '
+            const fs = require("fs");
+            const file = "node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI/Runtime/Values/JavaScriptObject.swift";
+            if (fs.existsSync(file)) {
+              let code = fs.readFileSync(file, "utf8");
+              code = code.replace(
+                "nonisolated(unsafe) let slot = buffer.baseAddress!",
+                "nonisolated(unsafe) let slot = buffer.baseAddress!\n    let slotAddr = Int(bitPattern: slot)"
+              );
+              code = code.replace(
+                "try encode(JavaScriptValue.Slot(slot), runtime)",
+                "try encode(JavaScriptValue.Slot(UnsafeMutablePointer<facebook.jsi.Value>(bitPattern: slotAddr)!), runtime)"
+              );
+              fs.writeFileSync(file, code, "utf8");
+              console.log("Patched JavaScriptObject.swift for Xcode 26.3 Swift 6.2 region isolation");
+            }
+          '
 
       - name: Expo Prebuild (Generate Native iOS Project)
         run: |
@@ -42,6 +58,7 @@ jobs:
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
           echo "Building Workspace: $WORKSPACE | Scheme: $SCHEME"
 
+          set +e
           xcodebuild \
             -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
@@ -55,7 +72,15 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            build
+            build > xcodebuild.log 2>&1
+          EXIT_CODE=$?
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "=== XCODEBUILD ERRORS ==="
+            grep -E "error:|BUILD FAILED" xcodebuild.log | tail -n 50
+            tail -n 100 xcodebuild.log
+            exit $EXIT_CODE
+          fi
+          set -e
 
       - name: Package .app into SoundVault.ipa
         run: |

@@ -6,20 +6,30 @@ import {
   TouchableOpacity,
   StyleSheet,
   Modal,
+  ScrollView,
 } from 'react-native';
+import { GENRE_LIST } from '../utils/theme';
 
-export default function RenameModal({ visible, song, onClose, onSave }) {
-  const [newTitle, setNewTitle] = useState('');
+export default function RenameModal({ visible, song, theme, onClose, onSave }) {
+  const [title, setTitle] = useState('');
+  const [artist, setArtist] = useState('');
+  const [genre, setGenre] = useState('Pop');
 
   useEffect(() => {
     if (song) {
-      setNewTitle(song.title);
+      setTitle(song.title || '');
+      setArtist(song.artist || 'Unknown Artist');
+      setGenre(song.genre || 'Pop');
     }
   }, [song]);
 
   const handleSave = () => {
-    if (newTitle.trim()) {
-      onSave(song.id, newTitle.trim());
+    if (title.trim()) {
+      onSave(song.id, {
+        title: title.trim(),
+        artist: artist.trim() || 'Unknown Artist',
+        genre: genre.trim() || 'Lainnya',
+      });
       onClose();
     }
   };
@@ -33,28 +43,101 @@ export default function RenameModal({ visible, song, onClose, onSave }) {
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Ganti Nama Lagu</Text>
-          <Text style={styles.subtitle}>
-            Sesuaikan judul lagu agar rapi di daftar putar.
+      <View style={[styles.overlay, { backgroundColor: theme.overlay }]}>
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: theme.surface,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <Text style={[styles.headerTitle, { color: theme.text }]}>
+            Edit Info Lagu
+          </Text>
+          <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
+            Atur judul, nama artist, dan kategori genre lagu.
           </Text>
 
+          {/* Input Judul */}
+          <Text style={[styles.label, { color: theme.textSecondary }]}>JUDUL LAGU</Text>
           <TextInput
-            style={styles.input}
-            value={newTitle}
-            onChangeText={setNewTitle}
-            placeholder="Masukkan judul lagu..."
-            placeholderTextColor="#6B7280"
-            autoFocus
-            selectTextOnFocus
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.surfaceElevated,
+                color: theme.text,
+                borderColor: theme.border,
+              },
+            ]}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Judul lagu..."
+            placeholderTextColor={theme.textMuted}
           />
+
+          {/* Input Artist */}
+          <Text style={[styles.label, { color: theme.textSecondary }]}>ARTIST</Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.surfaceElevated,
+                color: theme.text,
+                borderColor: theme.border,
+              },
+            ]}
+            value={artist}
+            onChangeText={setArtist}
+            placeholder="Nama penyanyi / band..."
+            placeholderTextColor={theme.textMuted}
+          />
+
+          {/* Pilihan Genre */}
+          <Text style={[styles.label, { color: theme.textSecondary }]}>GENRE</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.genreScroll}
+          >
+            {GENRE_LIST.map((g) => {
+              const selected = genre.toLowerCase() === g.toLowerCase();
+              return (
+                <TouchableOpacity
+                  key={g}
+                  style={[
+                    styles.genreChip,
+                    {
+                      backgroundColor: selected ? theme.accentStrong : theme.surfaceElevated,
+                      borderColor: selected ? theme.accentStrong : theme.border,
+                    },
+                  ]}
+                  onPress={() => setGenre(g)}
+                >
+                  <Text
+                    style={[
+                      styles.genreChipText,
+                      { color: selected ? '#FFFFFF' : theme.textSecondary },
+                    ]}
+                  >
+                    {g}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
           <View style={styles.btnRow}>
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-              <Text style={styles.cancelText}>Batal</Text>
+              <Text style={[styles.cancelText, { color: theme.textSecondary }]}>
+                Batal
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+            <TouchableOpacity
+              style={[styles.saveBtn, { backgroundColor: theme.accentStrong }]}
+              onPress={handleSave}
+            >
               <Text style={styles.saveText}>Simpan</Text>
             </TouchableOpacity>
           </View>
@@ -67,64 +150,76 @@ export default function RenameModal({ visible, song, onClose, onSave }) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
   },
   card: {
     width: '100%',
-    backgroundColor: '#1E1E28',
-    borderRadius: 18,
+    maxWidth: 380,
+    borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#2E2E3E',
   },
-  title: {
-    color: '#F3F4F6',
+  headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 6,
+    marginBottom: 4,
   },
-  subtitle: {
-    color: '#9CA3AF',
-    fontSize: 13,
+  headerSubtitle: {
+    fontSize: 12.5,
     marginBottom: 16,
   },
+  label: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
   input: {
-    backgroundColor: '#13131A',
     borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#FFFFFF',
-    fontSize: 15,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    fontSize: 14.5,
     borderWidth: 1,
-    borderColor: '#374151',
+    marginBottom: 14,
+  },
+  genreScroll: {
     marginBottom: 20,
+  },
+  genreChip: {
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  genreChipText: {
+    fontSize: 12.5,
+    fontWeight: '600',
   },
   btnRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   cancelBtn: {
     paddingVertical: 10,
     paddingHorizontal: 16,
-    marginRight: 10,
+    marginRight: 8,
   },
   cancelText: {
-    color: '#9CA3AF',
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '600',
   },
   saveBtn: {
-    backgroundColor: '#8B5CF6',
     paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
+    paddingHorizontal: 22,
+    borderRadius: 11,
   },
   saveText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14.5,
+    fontWeight: '700',
   },
 });

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
@@ -18,21 +19,30 @@ import {
   saveSongsMetadata,
   importSongFromDevice,
   deleteSong,
-  renameSongTitle,
+  updateSongMetadata,
   getFavorites,
   toggleFavoriteSong,
+  getSavedThemeMode,
+  saveThemeMode,
 } from './src/services/storageService';
 import { audioPlayer } from './src/services/audioService';
 import { generateDemoSongs } from './src/utils/demoSongs';
+import { THEMES } from './src/utils/theme';
+import AntigravityLogo from './src/components/AntigravityLogo';
 import SongItem from './src/components/SongItem';
 import MiniPlayer from './src/components/MiniPlayer';
 import PlayerModal from './src/components/PlayerModal';
 import RenameModal from './src/components/RenameModal';
 
 export default function App() {
+  const [themeMode, setThemeMode] = useState('dark');
+  const theme = THEMES[themeMode] || THEMES.dark;
+
   const [songs, setSongs] = useState([]);
   const [favorites, setFavorites] = useState([]);
-  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'favorites'
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'artists' | 'genres' | 'favorites'
+  const [selectedArtist, setSelectedArtist] = useState(null);
+  const [selectedGenre, setSelectedGenre] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
@@ -47,12 +57,11 @@ export default function App() {
     isShuffle: false,
   });
   const [isPlayerModalVisible, setIsPlayerModalVisible] = useState(false);
-  const [songToRename, setSongToRename] = useState(null);
+  const [songToEdit, setSongToEdit] = useState(null);
 
   useEffect(() => {
     loadInitialData();
 
-    // Berlangganan perubahan status audio
     const unsubStatus = audioPlayer.subscribeStatus((status) => {
       setPlayerStatus(status);
     });
@@ -65,15 +74,25 @@ export default function App() {
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
-      const stored = await getStoredSongs();
-      const favs = await getFavorites();
+      const [stored, favs, savedMode] = await Promise.all([
+        getStoredSongs(),
+        getFavorites(),
+        getSavedThemeMode(),
+      ]);
       setSongs(stored);
       setFavorites(favs);
+      setThemeMode(savedMode);
     } catch (e) {
       console.error('Error load data:', e);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleToggleTheme = async () => {
+    const nextMode = themeMode === 'dark' ? 'light' : 'dark';
+    setThemeMode(nextMode);
+    await saveThemeMode(nextMode);
   };
 
   const handleImportSongs = async () => {
@@ -83,7 +102,7 @@ export default function App() {
       if (result.success) {
         setSongs(result.songs);
         if (Platform.OS !== 'web') {
-          Alert.alert('Sukses!', `${result.count} lagu berhasil disimpan ke memori iPhone.`);
+          Alert.alert('Tersimpan', `${result.count} lagu ditambahkan ke penyimpanan.`);
         }
       } else if (result.error) {
         Alert.alert('Gagal Mengimpor', result.error);
@@ -97,13 +116,15 @@ export default function App() {
 
   const handleLoadDemoSongs = async () => {
     const demoTracks = generateDemoSongs();
-    const updated = [...demoTracks, ...songs];
+    const existingIds = new Set(songs.map((s) => s.id));
+    const newTracks = demoTracks.filter((d) => !existingIds.has(d.id));
+    const updated = [...newTracks, ...songs];
     setSongs(updated);
     await saveSongsMetadata(updated);
   };
 
-  const handlePlaySong = async (song, index) => {
-    const listToPlay = displayedSongs;
+  const handlePlaySong = async (song, index, customQueue = null) => {
+    const listToPlay = customQueue || displayedSongs;
     await audioPlayer.playSong(song, listToPlay, index);
   };
 
@@ -124,139 +145,404 @@ export default function App() {
     }
   };
 
-  const handleSaveRename = async (songId, newTitle) => {
+  const handleSaveMetadata = async (songId, updates) => {
     try {
-      const updated = await renameSongTitle(songId, newTitle);
+      const updated = await updateSongMetadata(songId, updates);
       setSongs(updated);
       if (playerStatus.currentSong?.id === songId) {
         setPlayerStatus((prev) => ({
           ...prev,
-          currentSong: { ...prev.currentSong, title: newTitle },
+          currentSong: {
+            ...prev.currentSong,
+            ...updates,
+          },
         }));
       }
     } catch (err) {
-      Alert.alert('Error', 'Gagal mengganti nama lagu.');
+      Alert.alert('Error', 'Gagal menyimpan perubahan info lagu.');
     }
   };
 
-  // Filter lagu berdasarkan tab dan pencarian
-  const displayedSongs = songs.filter((s) => {
-    const matchesSearch = s.title.toLowerCase().includes(searchQuery.toLowerCase());
-    if (activeTab === 'favorites') {
-      return matchesSearch && favorites.includes(s.id);
-    }
-    return matchesSearch;
-  });
+  // Daftar grup Artist unik beserta jumlah lagunya
+  const artistGroups = useMemo(() => {
+    const map = {};
+    songs.forEach((s) => {
+      const artist = s.artist || 'Unknown Artist';
+      if (!map[artist]) map[artist] = [];
+      map[artist].push(s);
+    });
+    return Object.keys(map)
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => ({ name, count: map[name].length, songs: map[name] }));
+  }, [songs]);
+
+  // Daftar grup Genre unik beserta jumlah lagunya
+  const genreGroups = useMemo(() => {
+    const map = {};
+    songs.forEach((s) => {
+      const genre = s.genre || 'Pop';
+      if (!map[genre]) map[genre] = [];
+      map[genre].push(s);
+    });
+    return Object.keys(map)
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => ({ name, count: map[name].length, songs: map[name] }));
+  }, [songs]);
+
+  // Filter lagu berdasarkan tab, sub-pilihan artist/genre, dan pencarian
+  const displayedSongs = useMemo(() => {
+    return songs.filter((s) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        !q ||
+        s.title.toLowerCase().includes(q) ||
+        (s.artist || '').toLowerCase().includes(q) ||
+        (s.genre || '').toLowerCase().includes(q);
+
+      if (!matchesSearch) return false;
+
+      if (activeTab === 'favorites') {
+        return favorites.includes(s.id);
+      }
+      if (activeTab === 'artists' && selectedArtist) {
+        return (s.artist || 'Unknown Artist') === selectedArtist;
+      }
+      if (activeTab === 'genres' && selectedGenre) {
+        return (s.genre || 'Pop') === selectedGenre;
+      }
+      return true;
+    });
+  }, [songs, searchQuery, activeTab, favorites, selectedArtist, selectedGenre]);
+
+  const handleSelectTab = (tabKey) => {
+    setActiveTab(tabKey);
+    if (tabKey !== 'artists') setSelectedArtist(null);
+    if (tabKey !== 'genres') setSelectedGenre(null);
+  };
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.outerBackground}>
-        <StatusBar barStyle="light-content" backgroundColor="#0B0B0E" />
-        <View style={styles.container}>
-          {/* Top Header */}
+      <SafeAreaView style={[styles.outerBackground, { backgroundColor: theme.outerBg }]}>
+        <StatusBar
+          barStyle={themeMode === 'dark' ? 'light-content' : 'dark-content'}
+          backgroundColor={theme.bg}
+        />
+
+        <View
+          style={[
+            styles.container,
+            {
+              backgroundColor: theme.bg,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          {/* Top Header Minimalis */}
           <View style={styles.header}>
-            <View>
-              <View style={styles.logoRow}>
-                <Ionicons name="musical-notes" size={24} color="#8B5CF6" />
-                <Text style={styles.appTitle}>SoundVault</Text>
-              </View>
-              <Text style={styles.appSubtitle}>Pemutar Musik Offline • 0 Iklan</Text>
+            <View style={styles.logoRow}>
+              <AntigravityLogo size={36} theme={theme} />
+              <Text style={[styles.appTitle, { color: theme.text }]}>
+                SoundVault
+              </Text>
             </View>
 
-            <TouchableOpacity
-              style={styles.importBtn}
-              onPress={handleImportSongs}
-              disabled={isImporting}
-              activeOpacity={0.8}
-            >
-              {isImporting ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Ionicons name="add" size={20} color="#FFFFFF" />
-                  <Text style={styles.importBtnText}>Tambah Lagu</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <View style={styles.headerRight}>
+              {/* Toggle Mode Hitam / Putih */}
+              <TouchableOpacity
+                style={[
+                  styles.themeToggleBtn,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                  },
+                ]}
+                onPress={handleToggleTheme}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name={themeMode === 'dark' ? 'sunny-outline' : 'moon-outline'}
+                  size={18}
+                  color={theme.accent}
+                />
+              </TouchableOpacity>
+
+              {/* Tombol Tambah Lagu */}
+              <TouchableOpacity
+                style={[
+                  styles.importBtn,
+                  {
+                    backgroundColor: theme.accentStrong,
+                    shadowColor: theme.accentStrong,
+                  },
+                ]}
+                onPress={handleImportSongs}
+                disabled={isImporting}
+                activeOpacity={0.85}
+              >
+                {isImporting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="add" size={18} color="#FFFFFF" />
+                    <Text style={styles.importBtnText}>Tambah</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {/* Search Bar */}
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={18} color="#6B7280" style={styles.searchIcon} />
+          {/* Search Bar Minimalis */}
+          <View
+            style={[
+              styles.searchContainer,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name="search-outline"
+              size={17}
+              color={theme.textMuted}
+              style={styles.searchIcon}
+            />
             <TextInput
-              style={styles.searchInput}
-              placeholder="Cari lagu di penyimpanan..."
-              placeholderTextColor="#6B7280"
+              style={[styles.searchInput, { color: theme.text }]}
+              placeholder="Cari lagu, artist, atau genre..."
+              placeholderTextColor={theme.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
               clearButtonMode="while-editing"
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={18} color="#6B7280" />
+                <Ionicons name="close-circle" size={17} color={theme.textMuted} />
               </TouchableOpacity>
             )}
           </View>
 
-          {/* Tab Filter (Semua Lagu vs Favorit) */}
-          <View style={styles.tabContainer}>
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'all' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('all')}
+          {/* Navigasi Tab (Semua, Artist, Genre, Favorit) */}
+          <View style={styles.tabWrapper}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.tabContainer}
             >
-              <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
-                Semua Lagu ({songs.length})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'favorites' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('favorites')}
-            >
-              <Text style={[styles.tabText, activeTab === 'favorites' && styles.tabTextActive]}>
-                Favorit ({favorites.length})
-              </Text>
-            </TouchableOpacity>
+              {[
+                { key: 'all', label: `Semua (${songs.length})`, icon: 'musical-notes-outline' },
+                { key: 'artists', label: `Artist (${artistGroups.length})`, icon: 'person-outline' },
+                { key: 'genres', label: `Genre (${genreGroups.length})`, icon: 'pricetag-outline' },
+                { key: 'favorites', label: `Favorit (${favorites.length})`, icon: 'heart-outline' },
+              ].map((tab) => {
+                const isActive = activeTab === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={[
+                      styles.tabBtn,
+                      {
+                        backgroundColor: isActive ? theme.accentStrong : theme.surface,
+                        borderColor: isActive ? theme.accentStrong : theme.border,
+                      },
+                    ]}
+                    onPress={() => handleSelectTab(tab.key)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name={tab.icon}
+                      size={14}
+                      color={isActive ? '#FFFFFF' : theme.textSecondary}
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text
+                      style={[
+                        styles.tabText,
+                        { color: isActive ? '#FFFFFF' : theme.textSecondary },
+                      ]}
+                    >
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
+
+          {/* Sub-Filter Pill ketika di Tab Artist */}
+          {activeTab === 'artists' && artistGroups.length > 0 && (
+            <View style={styles.subFilterWrapper}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.subFilterScroll}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.subChip,
+                    {
+                      backgroundColor: !selectedArtist ? theme.accentSoft : theme.surface,
+                      borderColor: !selectedArtist ? theme.accentBorder : theme.border,
+                    },
+                  ]}
+                  onPress={() => setSelectedArtist(null)}
+                >
+                  <Text
+                    style={[
+                      styles.subChipText,
+                      { color: !selectedArtist ? theme.accent : theme.textSecondary },
+                    ]}
+                  >
+                    Semua Artist
+                  </Text>
+                </TouchableOpacity>
+
+                {artistGroups.map((group) => {
+                  const active = selectedArtist === group.name;
+                  return (
+                    <TouchableOpacity
+                      key={group.name}
+                      style={[
+                        styles.subChip,
+                        {
+                          backgroundColor: active ? theme.accentSoft : theme.surface,
+                          borderColor: active ? theme.accentBorder : theme.border,
+                        },
+                      ]}
+                      onPress={() =>
+                        setSelectedArtist(active ? null : group.name)
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.subChipText,
+                          { color: active ? theme.accent : theme.textSecondary },
+                        ]}
+                      >
+                        {group.name} ({group.count})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Sub-Filter Pill ketika di Tab Genre */}
+          {activeTab === 'genres' && genreGroups.length > 0 && (
+            <View style={styles.subFilterWrapper}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.subFilterScroll}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.subChip,
+                    {
+                      backgroundColor: !selectedGenre ? theme.accentSoft : theme.surface,
+                      borderColor: !selectedGenre ? theme.accentBorder : theme.border,
+                    },
+                  ]}
+                  onPress={() => setSelectedGenre(null)}
+                >
+                  <Text
+                    style={[
+                      styles.subChipText,
+                      { color: !selectedGenre ? theme.accent : theme.textSecondary },
+                    ]}
+                  >
+                    Semua Genre
+                  </Text>
+                </TouchableOpacity>
+
+                {genreGroups.map((group) => {
+                  const active = selectedGenre === group.name;
+                  return (
+                    <TouchableOpacity
+                      key={group.name}
+                      style={[
+                        styles.subChip,
+                        {
+                          backgroundColor: active ? theme.accentSoft : theme.surface,
+                          borderColor: active ? theme.accentBorder : theme.border,
+                        },
+                      ]}
+                      onPress={() =>
+                        setSelectedGenre(active ? null : group.name)
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.subChipText,
+                          { color: active ? theme.accent : theme.textSecondary },
+                        ]}
+                      >
+                        {group.name} ({group.count})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
 
           {/* Konten Daftar Lagu */}
           {isLoading ? (
             <View style={styles.centerBox}>
-              <ActivityIndicator size="large" color="#8B5CF6" />
-              <Text style={styles.loadingText}>Memuat koleksi musik...</Text>
+              <ActivityIndicator size="large" color={theme.accentStrong} />
+              <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
+                Memuat pustaka musik...
+              </Text>
             </View>
           ) : displayedSongs.length === 0 ? (
             <View style={styles.emptyState}>
-              <View style={styles.emptyIconBox}>
+              <View
+                style={[
+                  styles.emptyIconBox,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
                 <Ionicons
-                  name={activeTab === 'favorites' ? 'heart-dislike' : 'cloud-upload'}
-                  size={48}
-                  color="#6B7280"
+                  name={activeTab === 'favorites' ? 'heart-outline' : 'disc-outline'}
+                  size={42}
+                  color={theme.accent}
                 />
               </View>
-              <Text style={styles.emptyTitle}>
+              <Text style={[styles.emptyTitle, { color: theme.text }]}>
                 {activeTab === 'favorites'
                   ? 'Belum Ada Lagu Favorit'
                   : searchQuery
-                  ? 'Lagu Tidak Ditemukan'
-                  : 'Penyimpanan Masih Kosong'}
+                  ? 'Tidak Ditemukan'
+                  : 'Pustaka Masih Kosong'}
               </Text>
-              <Text style={styles.emptySubtitle}>
+              <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
                 {activeTab === 'favorites'
-                  ? 'Tandai lagu dengan ikon hati untuk memindahkannya ke sini.'
+                  ? 'Ketuk ikon hati pada lagu untuk menyimpannya di tab Favorit.'
                   : searchQuery
-                  ? `Tidak ada lagu yang cocok dengan "${searchQuery}".`
-                  : 'Tekan tombol "+ Tambah Lagu" di atas untuk memilih file MP3/audio dari perangkat Anda.'}
+                  ? `Tidak ada lagu, artist, atau genre yang cocok dengan "${searchQuery}".`
+                  : 'Ketuk tombol "+ Tambah" di kanan atas untuk mengimpor lagu dari perangkat Anda.'}
               </Text>
 
-              {activeTab === 'all' && !searchQuery && (
+              {songs.length === 0 && !searchQuery && (
                 <TouchableOpacity
-                  style={styles.demoBtn}
+                  style={[
+                    styles.demoBtn,
+                    {
+                      backgroundColor: theme.accentSoft,
+                      borderColor: theme.accentBorder,
+                    },
+                  ]}
                   onPress={handleLoadDemoSongs}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="sparkles" size={16} color="#A78BFA" />
-                  <Text style={styles.demoBtnText}>Muat 3 Lagu Contoh (Uji Coba Fitur)</Text>
+                  <Ionicons name="sparkles-outline" size={16} color={theme.accent} />
+                  <Text style={[styles.demoBtnText, { color: theme.accent }]}>
+                    Muat 4 Lagu Contoh (Artist & Genre)
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -271,12 +557,13 @@ export default function App() {
               renderItem={({ item, index }) => (
                 <SongItem
                   song={item}
+                  theme={theme}
                   isPlaying={playerStatus.isPlaying}
                   isCurrentSong={playerStatus.currentSong?.id === item.id}
                   isFavorite={favorites.includes(item.id)}
                   onPress={() => handlePlaySong(item, index)}
                   onToggleFavorite={handleToggleFavorite}
-                  onRename={(song) => setSongToRename(song)}
+                  onEdit={(song) => setSongToEdit(song)}
                   onDelete={handleDeleteSong}
                 />
               )}
@@ -286,6 +573,7 @@ export default function App() {
           {/* Mini Player Melayang di Bawah */}
           <MiniPlayer
             currentSong={playerStatus.currentSong}
+            theme={theme}
             isPlaying={playerStatus.isPlaying}
             position={playerStatus.position}
             duration={playerStatus.duration}
@@ -299,13 +587,16 @@ export default function App() {
             visible={isPlayerModalVisible}
             onClose={() => setIsPlayerModalVisible(false)}
             currentSong={playerStatus.currentSong}
+            theme={theme}
             isPlaying={playerStatus.isPlaying}
             duration={playerStatus.duration}
             position={playerStatus.position}
             repeatMode={playerStatus.repeatMode}
             isShuffle={playerStatus.isShuffle}
             isFavorite={
-              playerStatus.currentSong ? favorites.includes(playerStatus.currentSong.id) : false
+              playerStatus.currentSong
+                ? favorites.includes(playerStatus.currentSong.id)
+                : false
             }
             onTogglePlayPause={() => audioPlayer.togglePlayPause()}
             onNext={() => audioPlayer.nextSong()}
@@ -316,12 +607,13 @@ export default function App() {
             onToggleFavorite={handleToggleFavorite}
           />
 
-          {/* Modal Ganti Nama Lagu */}
+          {/* Modal Edit Judul, Artist, & Genre */}
           <RenameModal
-            visible={!!songToRename}
-            song={songToRename}
-            onClose={() => setSongToRename(null)}
-            onSave={handleSaveRename}
+            visible={!!songToEdit}
+            song={songToEdit}
+            theme={theme}
+            onClose={() => setSongToEdit(null)}
+            onSave={handleSaveMetadata}
           />
         </View>
       </SafeAreaView>
@@ -332,24 +624,21 @@ export default function App() {
 const styles = StyleSheet.create({
   outerBackground: {
     flex: 1,
-    backgroundColor: '#050507',
   },
   container: {
     flex: 1,
     width: '100%',
     maxWidth: Platform.OS === 'web' ? 430 : '100%',
     alignSelf: 'center',
-    backgroundColor: '#0B0B0E',
     borderLeftWidth: Platform.OS === 'web' ? 1 : 0,
     borderRightWidth: Platform.OS === 'web' ? 1 : 0,
-    borderColor: '#1F1F2E',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingHorizontal: 18,
+    paddingTop: 12,
     paddingBottom: 14,
   },
   logoRow: {
@@ -357,27 +646,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   appTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: '800',
-    marginLeft: 8,
-    letterSpacing: 0.5,
+    marginLeft: 10,
+    letterSpacing: 0.3,
   },
-  appSubtitle: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginTop: 2,
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  themeToggleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
   importBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#8B5CF6',
     paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: 20,
-    shadowColor: '#8B5CF6',
+    borderRadius: 18,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
   },
@@ -390,13 +684,11 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#181822',
-    marginHorizontal: 20,
-    paddingHorizontal: 14,
-    height: 44,
+    marginHorizontal: 18,
+    paddingHorizontal: 13,
+    height: 42,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#262636',
     marginBottom: 12,
   },
   searchIcon: {
@@ -404,34 +696,50 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13.5,
+  },
+  tabWrapper: {
+    marginBottom: 10,
   },
   tabContainer: {
+    paddingHorizontal: 18,
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 12,
+    alignItems: 'center',
   },
   tabBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 13,
     borderRadius: 16,
-    backgroundColor: '#181822',
     marginRight: 8,
-  },
-  tabBtnActive: {
-    backgroundColor: '#8B5CF6',
+    borderWidth: 1,
   },
   tabText: {
-    color: '#9CA3AF',
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
   },
-  tabTextActive: {
-    color: '#FFFFFF',
+  subFilterWrapper: {
+    marginBottom: 10,
+  },
+  subFilterScroll: {
+    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  subChip: {
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginRight: 7,
+  },
+  subChipText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   listContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingTop: 4,
   },
   centerBox: {
@@ -440,8 +748,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#9CA3AF',
-    fontSize: 14,
+    fontSize: 13.5,
     marginTop: 10,
   },
   emptyState: {
@@ -449,43 +756,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 36,
-    marginTop: -30,
+    marginTop: -24,
   },
   emptyIconBox: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#181822',
+    width: 74,
+    height: 74,
+    borderRadius: 24,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
   },
   emptyTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'center',
   },
   emptySubtitle: {
-    color: '#9CA3AF',
     fontSize: 13,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 19,
     marginBottom: 20,
   },
   demoBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E1B2E',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#8B5CF655',
   },
   demoBtnText: {
-    color: '#C4B5FD',
     fontSize: 13,
     fontWeight: '600',
     marginLeft: 8,

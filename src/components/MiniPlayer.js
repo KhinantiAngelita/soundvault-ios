@@ -1,9 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AntigravityLogo from './AntigravityLogo';
 
 export default function MiniPlayer({
   currentSong,
+  theme,
   isPlaying,
   position,
   duration,
@@ -14,12 +16,30 @@ export default function MiniPlayer({
   if (!currentSong) return null;
 
   const progress = duration > 0 ? Math.min(position / duration, 1) : 0;
+  const artistName = currentSong.artist || 'Unknown Artist';
+  const genreName = currentSong.genre || 'Pop';
 
   return (
-    <View style={styles.wrapper}>
-      {/* Progress Bar Tipis di Bagian Atas Mini Player */}
-      <View style={styles.progressBarBackground}>
-        <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
+    <View
+      style={[
+        styles.wrapper,
+        {
+          backgroundColor: theme.surface,
+          borderColor: theme.accentBorder,
+        },
+      ]}
+    >
+      {/* Progress Bar Tipis Light Blue */}
+      <View style={[styles.progressBarBackground, { backgroundColor: theme.border }]}>
+        <View
+          style={[
+            styles.progressBarFill,
+            {
+              width: `${progress * 100}%`,
+              backgroundColor: theme.accentStrong,
+            },
+          ]}
+        />
       </View>
 
       <TouchableOpacity
@@ -27,20 +47,23 @@ export default function MiniPlayer({
         onPress={onPress}
         activeOpacity={0.9}
       >
-        <View style={styles.discIcon}>
-          <Ionicons
-            name="disc"
-            size={26}
-            color={isPlaying ? '#8B5CF6' : '#9CA3AF'}
-          />
+        <View style={styles.logoWrap}>
+          <AntigravityLogo size={38} theme={theme} />
         </View>
 
         <View style={styles.textContainer}>
-          <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
+          <Text
+            style={[styles.title, { color: theme.text }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
             {currentSong.title}
           </Text>
-          <Text style={styles.status}>
-            {isPlaying ? 'Sedang Memutar' : 'Dijeda'}
+          <Text
+            style={[styles.subtitle, { color: theme.textSecondary }]}
+            numberOfLines={1}
+          >
+            {artistName} • {genreName}
           </Text>
         </View>
 
@@ -53,7 +76,7 @@ export default function MiniPlayer({
             <Ionicons
               name={isPlaying ? 'pause-circle' : 'play-circle'}
               size={36}
-              color="#F3F4F6"
+              color={theme.accentStrong}
             />
           </TouchableOpacity>
 
@@ -62,7 +85,7 @@ export default function MiniPlayer({
             onPress={onNext}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="play-forward" size={24} color="#D1D5DB" />
+            <Ionicons name="play-forward" size={22} color={theme.textSecondary} />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -73,42 +96,32 @@ export default function MiniPlayer({
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 18,
     left: 16,
     right: 16,
-    backgroundColor: '#1E1E28',
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: '#0284C7',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 12,
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
     elevation: 10,
     borderWidth: 1,
-    borderColor: '#2D2D3D',
   },
   progressBarBackground: {
     height: 3,
-    backgroundColor: '#2D2D3D',
     width: '100%',
   },
   progressBarFill: {
     height: 3,
-    backgroundColor: '#8B5CF6',
   },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 13,
   },
-  discIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#2A2A38',
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoWrap: {
     marginRight: 12,
   },
   textContainer: {
@@ -116,13 +129,11 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   title: {
-    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
   },
-  status: {
-    color: '#9CA3AF',
-    fontSize: 11,
+  subtitle: {
+    fontSize: 11.5,
     marginTop: 2,
   },
   controls: {

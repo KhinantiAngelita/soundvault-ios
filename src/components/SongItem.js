@@ -11,45 +11,93 @@ import { formatFileSize } from '../utils/formatters';
 
 export default function SongItem({
   song,
+  theme,
   isPlaying,
   isCurrentSong,
   isFavorite,
   onPress,
   onToggleFavorite,
-  onRename,
+  onEdit,
   onDelete,
 }) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
 
+  const artistName = song.artist || 'Unknown Artist';
+  const genreName = song.genre || 'Pop';
+
   return (
     <>
       <TouchableOpacity
-        style={[styles.container, isCurrentSong && styles.containerActive]}
+        style={[
+          styles.container,
+          {
+            backgroundColor: isCurrentSong ? theme.surfaceActive : theme.surface,
+            borderColor: isCurrentSong ? theme.accentBorder : theme.borderSubtle,
+          },
+        ]}
         onPress={onPress}
-        activeOpacity={0.7}
+        activeOpacity={0.75}
       >
-        <View style={[styles.iconBox, isCurrentSong && styles.iconBoxActive]}>
+        {/* Icon / Playing Indicator */}
+        <View
+          style={[
+            styles.iconBox,
+            {
+              backgroundColor: isCurrentSong ? theme.accentSoft : theme.surfaceElevated,
+              borderColor: isCurrentSong ? theme.accentBorder : 'transparent',
+            },
+          ]}
+        >
           <Ionicons
-            name={isCurrentSong ? (isPlaying ? 'musical-notes' : 'pause') : 'musical-note'}
-            size={22}
-            color={isCurrentSong ? '#8B5CF6' : '#9CA3AF'}
+            name={isCurrentSong ? (isPlaying ? 'stats-chart' : 'pause') : 'musical-note'}
+            size={19}
+            color={isCurrentSong ? theme.accent : theme.textSecondary}
           />
         </View>
 
+        {/* Info Lagu: Judul, Artist, Genre Badge */}
         <View style={styles.infoContainer}>
           <Text
-            style={[styles.title, isCurrentSong && styles.titleActive]}
+            style={[
+              styles.title,
+              { color: isCurrentSong ? theme.accent : theme.text },
+            ]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
             {song.title}
           </Text>
-          <Text style={styles.subtitle}>
-            {formatFileSize(song.size)} • Penyimpanan Lokal
-          </Text>
+
+          <View style={styles.metaRow}>
+            <Text
+              style={[styles.artistText, { color: theme.textSecondary }]}
+              numberOfLines={1}
+            >
+              {artistName}
+            </Text>
+            <View style={[styles.dot, { backgroundColor: theme.textMuted }]} />
+            <View
+              style={[
+                styles.genreBadge,
+                {
+                  backgroundColor: theme.accentSoft,
+                  borderColor: theme.accentBorder,
+                },
+              ]}
+            >
+              <Text style={[styles.genreText, { color: theme.accent }]}>
+                {genreName}
+              </Text>
+            </View>
+            <View style={[styles.dot, { backgroundColor: theme.textMuted }]} />
+            <Text style={[styles.sizeText, { color: theme.textMuted }]}>
+              {formatFileSize(song.size)}
+            </Text>
+          </View>
         </View>
 
+        {/* Tombol Favorit & Menu */}
         <View style={styles.actions}>
           <TouchableOpacity
             style={styles.iconBtn}
@@ -58,8 +106,8 @@ export default function SongItem({
           >
             <Ionicons
               name={isFavorite ? 'heart' : 'heart-outline'}
-              size={20}
-              color={isFavorite ? '#EF4444' : '#6B7280'}
+              size={19}
+              color={isFavorite ? theme.danger : theme.textMuted}
             />
           </TouchableOpacity>
 
@@ -68,12 +116,12 @@ export default function SongItem({
             onPress={() => setMenuVisible(true)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="ellipsis-vertical" size={18} color="#9CA3AF" />
+            <Ionicons name="ellipsis-horizontal" size={18} color={theme.textSecondary} />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
 
-      {/* iOS Dark Action Sheet Menu */}
+      {/* Action Sheet Minimalis */}
       <Modal
         visible={menuVisible}
         transparent
@@ -81,17 +129,40 @@ export default function SongItem({
         onRequestClose={() => setMenuVisible(false)}
       >
         <TouchableOpacity
-          style={styles.modalOverlay}
+          style={[styles.modalOverlay, { backgroundColor: theme.overlay }]}
           activeOpacity={1}
           onPress={() => setMenuVisible(false)}
         >
-          <View style={styles.sheetContainer}>
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle} numberOfLines={1}>
+          <View
+            style={[
+              styles.sheetContainer,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <View style={[styles.sheetHeader, { borderBottomColor: theme.border }]}>
+              <Text style={[styles.sheetTitle, { color: theme.text }]} numberOfLines={1}>
                 {song.title}
               </Text>
-              <Text style={styles.sheetSubtitle}>Pilih tindakan untuk lagu ini</Text>
+              <Text style={[styles.sheetSubtitle, { color: theme.textSecondary }]}>
+                {artistName} • {genreName}
+              </Text>
             </View>
+
+            <TouchableOpacity
+              style={styles.sheetOption}
+              onPress={() => {
+                setMenuVisible(false);
+                onEdit(song);
+              }}
+            >
+              <Ionicons name="options-outline" size={20} color={theme.accent} />
+              <Text style={[styles.sheetOptionText, { color: theme.text }]}>
+                Edit Judul, Artist & Genre
+              </Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.sheetOption}
@@ -103,22 +174,11 @@ export default function SongItem({
               <Ionicons
                 name={isFavorite ? 'heart-dislike-outline' : 'heart-outline'}
                 size={20}
-                color="#E5E7EB"
+                color={theme.textSecondary}
               />
-              <Text style={styles.sheetOptionText}>
+              <Text style={[styles.sheetOptionText, { color: theme.text }]}>
                 {isFavorite ? 'Hapus dari Favorit' : 'Tambah ke Favorit'}
               </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.sheetOption}
-              onPress={() => {
-                setMenuVisible(false);
-                onRename(song);
-              }}
-            >
-              <Ionicons name="create-outline" size={20} color="#E5E7EB" />
-              <Text style={styles.sheetOptionText}>Ganti Nama Lagu</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -128,44 +188,58 @@ export default function SongItem({
                 setConfirmDeleteVisible(true);
               }}
             >
-              <Ionicons name="trash-outline" size={20} color="#EF4444" />
-              <Text style={[styles.sheetOptionText, { color: '#EF4444' }]}>
-                Hapus Lagu dari Penyimpanan
+              <Ionicons name="trash-outline" size={20} color={theme.danger} />
+              <Text style={[styles.sheetOptionText, { color: theme.danger }]}>
+                Hapus Lagu
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.sheetCancelBtn}
+              style={[styles.sheetCancelBtn, { backgroundColor: theme.surfaceElevated }]}
               onPress={() => setMenuVisible(false)}
             >
-              <Text style={styles.sheetCancelText}>Batal</Text>
+              <Text style={[styles.sheetCancelText, { color: theme.textSecondary }]}>
+                Tutup
+              </Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* Konfirmasi Hapus Lagu */}
+      {/* Konfirmasi Hapus */}
       <Modal
         visible={confirmDeleteVisible}
         transparent
         animationType="fade"
         onRequestClose={() => setConfirmDeleteVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>Hapus Lagu?</Text>
-            <Text style={styles.confirmText}>
-              File &quot;{song.title}&quot; akan dihapus permanen dari daftar penyimpanan.
+        <View style={[styles.modalOverlay, { backgroundColor: theme.overlay }]}>
+          <View
+            style={[
+              styles.confirmCard,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Text style={[styles.confirmTitle, { color: theme.text }]}>
+              Hapus Lagu?
+            </Text>
+            <Text style={[styles.confirmText, { color: theme.textSecondary }]}>
+              File &quot;{song.title}&quot; akan dihapus dari penyimpanan Anda.
             </Text>
             <View style={styles.confirmRow}>
               <TouchableOpacity
                 style={styles.confirmCancel}
                 onPress={() => setConfirmDeleteVisible(false)}
               >
-                <Text style={styles.confirmCancelText}>Batal</Text>
+                <Text style={[styles.confirmCancelText, { color: theme.textSecondary }]}>
+                  Batal
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.confirmDelete}
+                style={[styles.confirmDelete, { backgroundColor: theme.danger }]}
                 onPress={() => {
                   setConfirmDeleteVisible(false);
                   onDelete(song.id);
@@ -185,45 +259,60 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
     borderRadius: 14,
-    backgroundColor: '#181820',
     marginBottom: 8,
-  },
-  containerActive: {
-    backgroundColor: '#232035',
     borderWidth: 1,
-    borderColor: '#8B5CF655',
   },
   iconBox: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: 12,
-    backgroundColor: '#262632',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
-  },
-  iconBoxActive: {
-    backgroundColor: '#8B5CF622',
+    marginRight: 13,
+    borderWidth: 1,
   },
   infoContainer: {
     flex: 1,
     justifyContent: 'center',
   },
   title: {
-    color: '#F3F4F6',
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '600',
     marginBottom: 4,
+    letterSpacing: 0.1,
   },
-  titleActive: {
-    color: '#A78BFA',
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
   },
-  subtitle: {
-    color: '#9CA3AF',
+  artistText: {
     fontSize: 12,
+    fontWeight: '500',
+    maxWidth: 120,
+  },
+  dot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    marginHorizontal: 6,
+    opacity: 0.6,
+  },
+  genreBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+    borderWidth: 0.8,
+  },
+  genreText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+  },
+  sizeText: {
+    fontSize: 11,
   },
   actions: {
     flexDirection: 'row',
@@ -231,108 +320,93 @@ const styles = StyleSheet.create({
   },
   iconBtn: {
     padding: 6,
-    marginLeft: 4,
+    marginLeft: 2,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
   },
   sheetContainer: {
     width: '100%',
-    maxWidth: 400,
-    backgroundColor: '#1E1E28',
+    maxWidth: 380,
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#2E2E3E',
   },
   sheetHeader: {
     borderBottomWidth: 1,
-    borderBottomColor: '#2D2D3D',
     paddingBottom: 12,
     marginBottom: 8,
   },
   sheetTitle: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },
   sheetSubtitle: {
-    color: '#9CA3AF',
     fontSize: 12,
     marginTop: 2,
   },
   sheetOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 8,
+    paddingVertical: 13,
+    paddingHorizontal: 6,
   },
   sheetOptionText: {
-    color: '#F3F4F6',
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '500',
     marginLeft: 12,
   },
   sheetCancelBtn: {
     marginTop: 8,
-    backgroundColor: '#2A2A38',
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderRadius: 12,
     alignItems: 'center',
   },
   sheetCancelText: {
-    color: '#D1D5DB',
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '600',
   },
   confirmCard: {
     width: '100%',
-    maxWidth: 380,
-    backgroundColor: '#1E1E28',
+    maxWidth: 360,
     borderRadius: 18,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#2E2E3E',
   },
   confirmTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     marginBottom: 8,
   },
   confirmText: {
-    color: '#9CA3AF',
-    fontSize: 14,
+    fontSize: 13.5,
     lineHeight: 20,
-    marginBottom: 20,
+    marginBottom: 18,
   },
   confirmRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
   confirmCancel: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginRight: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    marginRight: 8,
   },
   confirmCancelText: {
-    color: '#9CA3AF',
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '600',
   },
   confirmDelete: {
-    backgroundColor: '#EF4444',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingVertical: 9,
+    paddingHorizontal: 18,
     borderRadius: 10,
   },
   confirmDeleteText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '600',
   },
 });

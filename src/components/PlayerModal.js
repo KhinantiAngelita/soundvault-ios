@@ -11,14 +11,16 @@ import {
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
 import { formatTime } from '../utils/formatters';
+import AntigravityLogo from './AntigravityLogo';
 
 const { width } = Dimensions.get('window');
-const DISC_SIZE = Math.min(width * 0.68, 260);
+const DISC_SIZE = Math.min(width * 0.66, 250);
 
 export default function PlayerModal({
   visible,
   onClose,
   currentSong,
+  theme,
   isPlaying,
   duration,
   position,
@@ -40,6 +42,8 @@ export default function PlayerModal({
 
   const currentPos = isSliding ? slidingValue : position;
   const maxDuration = duration > 0 ? duration : 1;
+  const artistName = currentSong.artist || 'Unknown Artist';
+  const genreName = currentSong.genre || 'Pop';
 
   const getRepeatIcon = () => {
     if (repeatMode === 'one') return 'repeat';
@@ -54,47 +58,86 @@ export default function PlayerModal({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.modalContainer}>
-        {/* Header Bar */}
+      <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.bg }]}>
+        {/* Header Minimalis */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.headerBtn}
             onPress={onClose}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="chevron-down" size={28} color="#E5E7EB" />
+            <Ionicons name="chevron-down" size={26} color={theme.textSecondary} />
           </TouchableOpacity>
           <View style={styles.headerTitleBox}>
-            <Text style={styles.headerTitle}>SEDANG DIPUTAR</Text>
-            <Text style={styles.headerSubtitle}>SoundVault Offline</Text>
+            <Text style={[styles.headerTitle, { color: theme.textMuted }]}>
+              NOW PLAYING
+            </Text>
+            <View
+              style={[
+                styles.genreHeaderBadge,
+                {
+                  backgroundColor: theme.accentSoft,
+                  borderColor: theme.accentBorder,
+                },
+              ]}
+            >
+              <Text style={[styles.genreHeaderText, { color: theme.accent }]}>
+                {genreName}
+              </Text>
+            </View>
           </View>
           <View style={styles.headerBtnPlaceholder} />
         </View>
 
-        {/* Vinyl / Cover Art Container */}
+        {/* Orbital Vinyl Art dengan Logo Antigravity */}
         <View style={styles.coverContainer}>
-          <View style={styles.vinylShadow}>
-            <View style={styles.vinylDisc}>
-              <View style={styles.vinylGrooves}>
-                <View style={styles.vinylCenter}>
-                  <Ionicons
-                    name="musical-notes"
-                    size={48}
-                    color="#8B5CF6"
-                  />
+          <View style={[styles.vinylShadow, { shadowColor: theme.accentStrong }]}>
+            <View
+              style={[
+                styles.vinylDisc,
+                {
+                  backgroundColor: theme.vinylDisc,
+                  borderColor: theme.vinylBorder,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.vinylGrooves,
+                  { borderColor: theme.vinylGroove },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.vinylCenter,
+                    {
+                      backgroundColor: theme.vinylCenter,
+                      borderColor: theme.accentBorder,
+                    },
+                  ]}
+                >
+                  <AntigravityLogo size={64} theme={theme} />
                 </View>
               </View>
             </View>
           </View>
         </View>
 
-        {/* Info & Favorite */}
+        {/* Judul, Artist & Favorit */}
         <View style={styles.songInfoContainer}>
           <View style={styles.titleWrapper}>
-            <Text style={styles.songTitle} numberOfLines={2}>
+            <Text
+              style={[styles.songTitle, { color: theme.text }]}
+              numberOfLines={2}
+            >
               {currentSong.title}
             </Text>
-            <Text style={styles.artistName}>Penyimpanan Lokal iPhone</Text>
+            <Text
+              style={[styles.artistName, { color: theme.accent }]}
+              numberOfLines={1}
+            >
+              {artistName}
+            </Text>
           </View>
           <TouchableOpacity
             onPress={() => onToggleFavorite(currentSong.id)}
@@ -102,22 +145,22 @@ export default function PlayerModal({
           >
             <Ionicons
               name={isFavorite ? 'heart' : 'heart-outline'}
-              size={28}
-              color={isFavorite ? '#EF4444' : '#9CA3AF'}
+              size={26}
+              color={isFavorite ? theme.danger : theme.textMuted}
             />
           </TouchableOpacity>
         </View>
 
-        {/* Scrubber / Slider */}
+        {/* Scrubber / Slider Light Blue */}
         <View style={styles.sliderContainer}>
           <Slider
             style={styles.slider}
             minimumValue={0}
             maximumValue={maxDuration}
             value={currentPos}
-            minimumTrackTintColor="#8B5CF6"
-            maximumTrackTintColor="#374151"
-            thumbTintColor="#FFFFFF"
+            minimumTrackTintColor={theme.accentStrong}
+            maximumTrackTintColor={theme.border}
+            thumbTintColor={theme.accentStrong}
             onValueChange={(val) => {
               setIsSliding(true);
               setSlidingValue(val);
@@ -128,14 +171,17 @@ export default function PlayerModal({
             }}
           />
           <View style={styles.timeRow}>
-            <Text style={styles.timeText}>{formatTime(currentPos)}</Text>
-            <Text style={styles.timeText}>{formatTime(duration)}</Text>
+            <Text style={[styles.timeText, { color: theme.textMuted }]}>
+              {formatTime(currentPos)}
+            </Text>
+            <Text style={[styles.timeText, { color: theme.textMuted }]}>
+              {formatTime(duration)}
+            </Text>
           </View>
         </View>
 
-        {/* Player Controls */}
+        {/* Kontrol Pemutar */}
         <View style={styles.controlsRow}>
-          {/* Shuffle Button */}
           <TouchableOpacity
             style={styles.controlSmallBtn}
             onPress={onToggleShuffle}
@@ -143,44 +189,46 @@ export default function PlayerModal({
           >
             <Ionicons
               name={isShuffle ? 'shuffle' : 'shuffle-outline'}
-              size={24}
-              color={isShuffle ? '#A78BFA' : '#6B7280'}
+              size={23}
+              color={isShuffle ? theme.accent : theme.textMuted}
             />
           </TouchableOpacity>
 
-          {/* Previous Button */}
           <TouchableOpacity
             style={styles.controlBtn}
             onPress={onPrevious}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="play-skip-back" size={32} color="#F3F4F6" />
+            <Ionicons name="play-skip-back" size={30} color={theme.text} />
           </TouchableOpacity>
 
-          {/* Big Play/Pause Button */}
           <TouchableOpacity
-            style={styles.playPauseBtn}
+            style={[
+              styles.playPauseBtn,
+              {
+                backgroundColor: theme.accentStrong,
+                shadowColor: theme.accentStrong,
+              },
+            ]}
             onPress={onTogglePlayPause}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
             <Ionicons
               name={isPlaying ? 'pause' : 'play'}
-              size={36}
+              size={34}
               color="#FFFFFF"
-              style={!isPlaying ? { marginLeft: 4 } : {}}
+              style={!isPlaying ? { marginLeft: 3 } : {}}
             />
           </TouchableOpacity>
 
-          {/* Next Button */}
           <TouchableOpacity
             style={styles.controlBtn}
             onPress={onNext}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="play-skip-forward" size={32} color="#F3F4F6" />
+            <Ionicons name="play-skip-forward" size={30} color={theme.text} />
           </TouchableOpacity>
 
-          {/* Repeat Button */}
           <TouchableOpacity
             style={styles.controlSmallBtn}
             onPress={onToggleRepeat}
@@ -188,11 +236,16 @@ export default function PlayerModal({
           >
             <Ionicons
               name={getRepeatIcon()}
-              size={24}
-              color={repeatMode !== 'off' ? '#A78BFA' : '#6B7280'}
+              size={23}
+              color={repeatMode !== 'off' ? theme.accent : theme.textMuted}
             />
             {repeatMode === 'one' && (
-              <View style={styles.repeatBadge}>
+              <View
+                style={[
+                  styles.repeatBadge,
+                  { backgroundColor: theme.accentStrong },
+                ]}
+              >
                 <Text style={styles.repeatBadgeText}>1</Text>
               </View>
             )}
@@ -206,16 +259,15 @@ export default function PlayerModal({
 const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
-    backgroundColor: '#0F0F14',
     justifyContent: 'space-between',
-    paddingBottom: 24,
+    paddingBottom: 28,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 14,
   },
   headerBtn: {
     width: 40,
@@ -229,26 +281,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    color: '#9CA3AF',
-    fontSize: 11,
-    letterSpacing: 1.5,
+    fontSize: 10.5,
+    letterSpacing: 1.8,
     fontWeight: '700',
   },
-  headerSubtitle: {
-    color: '#D1D5DB',
-    fontSize: 13,
-    fontWeight: '500',
-    marginTop: 2,
+  genreHeaderBadge: {
+    marginTop: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  genreHeaderText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   coverContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 20,
+    marginVertical: 16,
   },
   vinylShadow: {
-    shadowColor: '#8B5CF6',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.28,
     shadowRadius: 24,
     elevation: 16,
   },
@@ -256,30 +311,25 @@ const styles = StyleSheet.create({
     width: DISC_SIZE,
     height: DISC_SIZE,
     borderRadius: DISC_SIZE / 2,
-    backgroundColor: '#16161F',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 4,
-    borderColor: '#242433',
+    borderWidth: 3,
   },
   vinylGrooves: {
-    width: '85%',
-    height: '85%',
+    width: '84%',
+    height: '84%',
     borderRadius: 999,
-    borderWidth: 2,
-    borderColor: '#282838',
+    borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
   },
   vinylCenter: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#201F30',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#8B5CF644',
+    borderWidth: 2,
   },
   songInfoContainer: {
     flexDirection: 'row',
@@ -292,39 +342,39 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   songTitle: {
-    color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 4,
+    letterSpacing: 0.2,
   },
   artistName: {
-    color: '#9CA3AF',
-    fontSize: 14,
+    fontSize: 14.5,
+    fontWeight: '600',
   },
   sliderContainer: {
     paddingHorizontal: 20,
-    marginVertical: 10,
+    marginVertical: 8,
   },
   slider: {
     width: '100%',
-    height: 40,
+    height: 38,
   },
   timeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 8,
-    marginTop: -8,
+    marginTop: -6,
   },
   timeText: {
-    color: '#9CA3AF',
-    fontSize: 12,
+    fontSize: 11.5,
+    fontWeight: '500',
   },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 24,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   controlSmallBtn: {
     padding: 10,
@@ -334,15 +384,13 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   playPauseBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#8B5CF6',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#8B5CF6',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 8,
   },
@@ -350,16 +398,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 6,
     right: 4,
-    backgroundColor: '#8B5CF6',
     borderRadius: 6,
-    width: 12,
-    height: 12,
+    width: 13,
+    height: 13,
     justifyContent: 'center',
     alignItems: 'center',
   },
   repeatBadgeText: {
     color: '#FFFFFF',
-    fontSize: 8,
+    fontSize: 8.5,
     fontWeight: 'bold',
   },
 });
