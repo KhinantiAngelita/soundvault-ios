@@ -147,6 +147,7 @@ function SongItem({
       </TouchableOpacity>
 
       {/* iOS Context Sheet */}
+      {menuVisible && (
       <Modal
         visible={menuVisible}
         transparent
@@ -284,8 +285,10 @@ function SongItem({
           </View>
         </TouchableOpacity>
       </Modal>
+      )}
 
       {/* Modal Pilih / Buat Playlist */}
+      {playlistModalVisible && (
       <Modal
         visible={playlistModalVisible}
         transparent
@@ -400,8 +403,10 @@ function SongItem({
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+      )}
 
       {/* Konfirmasi Hapus */}
+      {confirmDeleteVisible && (
       <Modal
         visible={confirmDeleteVisible}
         transparent
@@ -451,6 +456,7 @@ function SongItem({
           </View>
         </View>
       </Modal>
+      )}
     </>
   );
 }

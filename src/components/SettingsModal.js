@@ -78,7 +78,7 @@ export default function SettingsModal({
             </TouchableOpacity>
           </View>
 
-          {/* Bagian 1: Tema Aplikasi (iOS Grouped Segmented Control) */}
+          {/* Bagian 1: Tema Aplikasi (iOS Grouped Segmented Control: Sistem / Gelap / Terang) */}
           <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
             TEMA
           </Text>
@@ -90,65 +90,45 @@ export default function SettingsModal({
               },
             ]}
           >
-            <TouchableOpacity
-              style={[
-                styles.themeOptionBtn,
-                themeMode === 'dark' && [
-                  styles.themeOptionActive,
-                  { backgroundColor: theme.surface },
-                ],
-              ]}
-              onPress={() => onSelectTheme('dark')}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name="moon-outline"
-                size={14.5}
-                color={themeMode === 'dark' ? theme.text : theme.textSecondary}
-                style={{ marginRight: 6 }}
-              />
-              <Text
-                style={[
-                  styles.themeOptionText,
-                  {
-                    color: themeMode === 'dark' ? theme.text : theme.textSecondary,
-                    fontWeight: themeMode === 'dark' ? '600' : '500',
-                  },
-                ]}
-              >
-                Gelap
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.themeOptionBtn,
-                themeMode === 'light' && [
-                  styles.themeOptionActive,
-                  { backgroundColor: theme.surface },
-                ],
-              ]}
-              onPress={() => onSelectTheme('light')}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name="sunny-outline"
-                size={15.5}
-                color={themeMode === 'light' ? theme.text : theme.textSecondary}
-                style={{ marginRight: 6 }}
-              />
-              <Text
-                style={[
-                  styles.themeOptionText,
-                  {
-                    color: themeMode === 'light' ? theme.text : theme.textSecondary,
-                    fontWeight: themeMode === 'light' ? '600' : '500',
-                  },
-                ]}
-              >
-                Terang
-              </Text>
-            </TouchableOpacity>
+            {[
+              { key: 'system', label: 'Sistem', icon: 'phone-portrait-outline', size: 14 },
+              { key: 'dark', label: 'Gelap', icon: 'moon-outline', size: 14 },
+              { key: 'light', label: 'Terang', icon: 'sunny-outline', size: 15 },
+            ].map((opt) => {
+              const active = themeMode === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[
+                    styles.themeOptionBtn,
+                    active && [
+                      styles.themeOptionActive,
+                      { backgroundColor: theme.surface },
+                    ],
+                  ]}
+                  onPress={() => onSelectTheme(opt.key)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons
+                    name={opt.icon}
+                    size={opt.size}
+                    color={active ? theme.text : theme.textSecondary}
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text
+                    style={[
+                      styles.themeOptionText,
+                      {
+                        color: active ? theme.text : theme.textSecondary,
+                        fontWeight: active ? '600' : '500',
+                      },
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {/* Bagian 2: Urutan Lagu (iOS Native List dengan Leading Icon Tanpa Kotak) */}

@@ -18,6 +18,7 @@ class AudioService {
     this.sleepTimerRemainingSec = 0;
     this.sleepInterval = null;
     this.statusListeners = new Set();
+    this.progressListeners = new Set();
     this.songChangeListeners = new Set();
     this.isInitialized = false;
   }
@@ -41,9 +42,28 @@ class AudioService {
     return () => this.statusListeners.delete(listener);
   }
 
+  subscribeProgress(listener) {
+    this.progressListeners.add(listener);
+    listener({
+      position: this.position,
+      duration: this.duration,
+      sleepTimerRemainingSec: this.sleepTimerRemainingSec,
+    });
+    return () => this.progressListeners.delete(listener);
+  }
+
   subscribeSongChange(listener) {
     this.songChangeListeners.add(listener);
     return () => this.songChangeListeners.delete(listener);
+  }
+
+  notifyProgress() {
+    const progressData = {
+      position: this.position,
+      duration: this.duration,
+      sleepTimerRemainingSec: this.sleepTimerRemainingSec,
+    };
+    this.progressListeners.forEach((fn) => fn(progressData));
   }
 
   notifyStatus() {
@@ -62,6 +82,7 @@ class AudioService {
       queueLength: this.queue.length,
     };
     this.statusListeners.forEach((fn) => fn(statusData));
+    this.notifyProgress();
   }
 
   notifySongChange() {
@@ -203,6 +224,7 @@ class AudioService {
   onPlaybackStatusUpdate(status) {
     if (!status) return;
 
+    const prevIsPlaying = this.isPlaying;
     this.position = Math.max(0, (status.currentTime || 0) * 1000);
     if (status.duration && status.duration > 0) {
       this.duration = status.duration * 1000;
@@ -215,7 +237,12 @@ class AudioService {
       return;
     }
 
-    this.notifyStatus();
+    // Hanya render ulang komponen utama jika status play/pause berubah
+    if (prevIsPlaying !== this.isPlaying) {
+      this.notifyStatus();
+    } else {
+      this.notifyProgress();
+    }
   }
 
   async handleSongFinished() {
@@ -421,7 +448,7 @@ class AudioService {
         this.sleepTimerRemainingSec = 0;
         await this.pause();
       } else {
-        this.notifyStatus();
+        this.notifyProgress();
       }
     }, 1000);
   }

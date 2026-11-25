@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatTime, formatFileSize } from '../utils/formatters';
 import AntigravityLogo from './AntigravityLogo';
 import { CENURA_FONT } from '../utils/theme';
+import { audioPlayer } from '../services/audioService';
 
 const { width } = Dimensions.get('window');
 const DISC_SIZE = Math.min(width * 0.62, 234);
@@ -58,11 +59,25 @@ export default function PlayerModal({
   const [slidingValue, setSlidingValue] = useState(0);
   const [viewMode, setViewMode] = useState('cover'); // 'cover' | 'lyrics' | 'queue' | 'info'
   const [showSleepPicker, setShowSleepPicker] = useState(false);
+  const [liveProgress, setLiveProgress] = useState({
+    position: position || 0,
+    duration: duration || 0,
+    sleepTimerRemainingSec: sleepTimerRemainingSec || 0,
+  });
 
-  if (!currentSong) return null;
+  useEffect(() => {
+    if (!visible) return;
+    const unsub = audioPlayer.subscribeProgress((data) => {
+      setLiveProgress(data);
+    });
+    return () => unsub();
+  }, [visible, currentSong?.id]);
 
-  const currentPos = isSliding ? slidingValue : position;
-  const maxDuration = duration > 0 ? duration : 1;
+  if (!currentSong || !visible) return null;
+
+  const currentPos = isSliding ? slidingValue : liveProgress.position;
+  const maxDuration = liveProgress.duration > 0 ? liveProgress.duration : 1;
+  const activeSleepRemainingSec = liveProgress.sleepTimerRemainingSec;
   const artistName = currentSong.artist || 'Unknown Artist';
   const genreName = currentSong.genre || 'Pop';
   const albumName = currentSong.album || 'Single';
@@ -533,7 +548,7 @@ export default function PlayerModal({
               ]}
             >
               {sleepTimerMinutes > 0
-                ? `Sleep (${formatCountdown(sleepTimerRemainingSec)})`
+                ? `Sleep (${formatCountdown(activeSleepRemainingSec)})`
                 : 'Sleep Timer'}
             </Text>
           </TouchableOpacity>
@@ -627,7 +642,7 @@ export default function PlayerModal({
               {formatTime(currentPos)}
             </Text>
             <Text style={[styles.timeText, { color: theme.textMuted }]}>
-              {formatTime(duration)}
+              {formatTime(liveProgress.duration)}
             </Text>
           </View>
         </View>

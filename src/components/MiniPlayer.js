@@ -1,22 +1,31 @@
-import React from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AntigravityLogo from './AntigravityLogo';
 import { CENURA_FONT } from '../utils/theme';
+import { audioPlayer } from '../services/audioService';
 
-export default function MiniPlayer({
+function MiniPlayer({
   currentSong,
   theme,
   isPlaying,
-  position,
-  duration,
   onPress,
   onTogglePlayPause,
   onNext,
 }) {
+  const [prog, setProg] = useState({ position: 0, duration: 0 });
+
+  useEffect(() => {
+    if (!currentSong) return;
+    const unsub = audioPlayer.subscribeProgress(({ position, duration }) => {
+      setProg({ position, duration });
+    });
+    return () => unsub();
+  }, [currentSong?.id]);
+
   if (!currentSong) return null;
 
-  const progress = duration > 0 ? Math.min(position / duration, 1) : 0;
+  const progress = prog.duration > 0 ? Math.min(prog.position / prog.duration, 1) : 0;
   const artistName = currentSong.artist || 'Unknown Artist';
   const genreName = currentSong.genre || 'Pop';
   const isLight = theme.mode === 'light';
@@ -182,3 +191,5 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
 });
+
+export default memo(MiniPlayer);

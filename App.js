@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,6 +11,7 @@ import {
   Alert,
   StatusBar,
   Platform,
+  useColorScheme,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,8 +46,15 @@ import SettingsModal from './src/components/SettingsModal';
 import SplashScreen from './src/components/SplashScreen';
 
 export default function App() {
-  const [themeMode, setThemeMode] = useState('dark');
-  const theme = THEMES[themeMode] || THEMES.dark;
+  const systemColorScheme = useColorScheme();
+  const [themeMode, setThemeMode] = useState('system'); // 'system' | 'dark' | 'light'
+  const resolvedThemeMode =
+    themeMode === 'system'
+      ? systemColorScheme === 'light'
+        ? 'light'
+        : 'dark'
+      : themeMode;
+  const theme = THEMES[resolvedThemeMode] || THEMES.dark;
 
   const [songs, setSongs] = useState([]);
   const [favorites, setFavorites] = useState([]);
@@ -361,7 +369,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <StatusBar
-          barStyle={themeMode === 'dark' ? 'light-content' : 'dark-content'}
+          barStyle={resolvedThemeMode === 'dark' ? 'light-content' : 'dark-content'}
           backgroundColor={theme.bg}
         />
         <SplashScreen
@@ -380,7 +388,7 @@ export default function App() {
         edges={['top']}
       >
         <StatusBar
-          barStyle={themeMode === 'dark' ? 'light-content' : 'dark-content'}
+          barStyle={resolvedThemeMode === 'dark' ? 'light-content' : 'dark-content'}
           backgroundColor={theme.bg}
         />
 
@@ -811,72 +819,74 @@ export default function App() {
           )}
 
           {/* Mini Player Melayang di Bawah */}
-          <MiniPlayer
-            currentSong={playerStatus.currentSong}
-            theme={theme}
-            isPlaying={playerStatus.isPlaying}
-            position={playerStatus.position}
-            duration={playerStatus.duration}
-            onPress={() => setIsPlayerModalVisible(true)}
-            onTogglePlayPause={() => audioPlayer.togglePlayPause()}
-            onNext={() => audioPlayer.nextSong()}
-          />
+          {playerStatus.currentSong && (
+            <MiniPlayer
+              currentSong={playerStatus.currentSong}
+              theme={theme}
+              isPlaying={playerStatus.isPlaying}
+              onPress={() => setIsPlayerModalVisible(true)}
+              onTogglePlayPause={() => audioPlayer.togglePlayPause()}
+              onNext={() => audioPlayer.nextSong()}
+            />
+          )}
 
-          {/* Modal Player Layar Penuh */}
-          <PlayerModal
-            visible={isPlayerModalVisible}
-            onClose={() => setIsPlayerModalVisible(false)}
-            currentSong={playerStatus.currentSong}
-            queue={displayedSongs}
-            theme={theme}
-            isPlaying={playerStatus.isPlaying}
-            duration={playerStatus.duration}
-            position={playerStatus.position}
-            repeatMode={playerStatus.repeatMode}
-            isShuffle={playerStatus.isShuffle}
-            playbackRate={playerStatus.playbackRate || 1.0}
-            sleepTimerMinutes={playerStatus.sleepTimerMinutes || 0}
-            sleepTimerRemainingSec={playerStatus.sleepTimerRemainingSec || 0}
-            isFavorite={
-              playerStatus.currentSong
-                ? favorites.includes(playerStatus.currentSong.id)
-                : false
-            }
-            onTogglePlayPause={() => audioPlayer.togglePlayPause()}
-            onNext={() => audioPlayer.nextSong()}
-            onPrevious={() => audioPlayer.previousSong()}
-            onSeek={(val) => audioPlayer.seekTo(val)}
-            onToggleRepeat={() => audioPlayer.toggleRepeatMode()}
-            onToggleShuffle={() => audioPlayer.toggleShuffle()}
-            onCyclePlaybackRate={() => audioPlayer.cyclePlaybackRate()}
-            onSetSleepTimer={(mins) => audioPlayer.setSleepTimer(mins)}
-            onSelectQueueSong={(track, idx) => handlePlaySong(track, idx)}
-            onToggleFavorite={handleToggleFavorite}
-            onOpenEditor={(song, tabKey) => handleOpenEditor(song, tabKey)}
-          />
+          {/* Modal Player Layar Penuh (Hanya Mount Saat Dibuka agar Tidak Menghalangi Sentuhan di iOS) */}
+          {isPlayerModalVisible && playerStatus.currentSong && (
+            <PlayerModal
+              visible={isPlayerModalVisible}
+              onClose={() => setIsPlayerModalVisible(false)}
+              currentSong={playerStatus.currentSong}
+              queue={displayedSongs}
+              theme={theme}
+              isPlaying={playerStatus.isPlaying}
+              duration={playerStatus.duration}
+              position={playerStatus.position}
+              repeatMode={playerStatus.repeatMode}
+              isShuffle={playerStatus.isShuffle}
+              playbackRate={playerStatus.playbackRate || 1.0}
+              sleepTimerMinutes={playerStatus.sleepTimerMinutes || 0}
+              sleepTimerRemainingSec={playerStatus.sleepTimerRemainingSec || 0}
+              isFavorite={favorites.includes(playerStatus.currentSong.id)}
+              onTogglePlayPause={() => audioPlayer.togglePlayPause()}
+              onNext={() => audioPlayer.nextSong()}
+              onPrevious={() => audioPlayer.previousSong()}
+              onSeek={(val) => audioPlayer.seekTo(val)}
+              onToggleRepeat={() => audioPlayer.toggleRepeatMode()}
+              onToggleShuffle={() => audioPlayer.toggleShuffle()}
+              onCyclePlaybackRate={() => audioPlayer.cyclePlaybackRate()}
+              onSetSleepTimer={(mins) => audioPlayer.setSleepTimer(mins)}
+              onSelectQueueSong={(track, idx) => handlePlaySong(track, idx)}
+              onToggleFavorite={handleToggleFavorite}
+              onOpenEditor={(song, tabKey) => handleOpenEditor(song, tabKey)}
+            />
+          )}
 
           {/* Modal Edit Judul, Artist, Genre, Cover, Lyrics & Detail */}
-          <RenameModal
-            visible={!!songToEdit}
-            song={songToEdit}
-            initialTab={editorInitialTab}
-            theme={theme}
-            onClose={() => setSongToEdit(null)}
-            onSave={handleSaveMetadata}
-          />
+          {!!songToEdit && (
+            <RenameModal
+              visible={!!songToEdit}
+              song={songToEdit}
+              initialTab={editorInitialTab}
+              theme={theme}
+              onClose={() => setSongToEdit(null)}
+              onSave={handleSaveMetadata}
+            />
+          )}
 
-          {/* Modal Pengaturan (Tema Hitam/Putih & Sorting Lagu) */}
-          <SettingsModal
-            visible={isSettingsVisible}
-            onClose={() => setIsSettingsVisible(false)}
-            theme={theme}
-            themeMode={themeMode}
-            onSelectTheme={handleSelectTheme}
-            sortOrder={sortOrder}
-            onSelectSortOrder={handleSelectSortOrder}
-            totalSongs={songs.length}
-            totalBytes={totalStorageBytes}
-          />
+          {/* Modal Pengaturan (Tema Sistem/Hitam/Putih & Sorting Lagu) */}
+          {isSettingsVisible && (
+            <SettingsModal
+              visible={isSettingsVisible}
+              onClose={() => setIsSettingsVisible(false)}
+              theme={theme}
+              themeMode={themeMode}
+              onSelectTheme={handleSelectTheme}
+              sortOrder={sortOrder}
+              onSelectSortOrder={handleSelectSortOrder}
+              totalSongs={songs.length}
+              totalBytes={totalStorageBytes}
+            />
+          )}
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

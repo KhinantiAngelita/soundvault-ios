@@ -28,9 +28,12 @@ export const ensureDirectoryExists = async () => {
 export const getSavedThemeMode = async () => {
   try {
     const mode = await AsyncStorage.getItem(THEME_KEY);
-    return mode === 'light' ? 'light' : 'dark';
+    if (mode === 'light' || mode === 'dark' || mode === 'system') {
+      return mode;
+    }
+    return 'system';
   } catch (e) {
-    return 'dark';
+    return 'system';
   }
 };
 
