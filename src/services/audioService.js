@@ -1,8 +1,9 @@
-import { Audio } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
 class AudioService {
   constructor() {
-    this.sound = null;
+    this.player = null;
+    this.statusSubscription = null;
     this.currentSong = null;
     this.queue = [];
     this.currentIndex = -1;
@@ -12,7 +13,7 @@ class AudioService {
     this.isBuffering = false;
     this.repeatMode = 'off'; // 'off' | 'all' | 'one'
     this.isShuffle = false;
-    this.playbackRate = 1.0; // 0.75 | 0.85 | 1.0 | 1.25 | 1.5
+    this.playbackRate = 1.0; // 0.85 | 1.0 | 1.25 | 1.5
     this.sleepTimerMinutes = 0;
     this.sleepTimerRemainingSec = 0;
     this.sleepInterval = null;
@@ -24,12 +25,10 @@ class AudioService {
   async init() {
     if (this.isInitialized) return;
     try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        shouldPlayInBackground: true,
+        interruptionMode: 'doNotMix',
       });
       this.isInitialized = true;
     } catch (error) {
@@ -69,16 +68,33 @@ class AudioService {
     this.songChangeListeners.forEach((fn) => fn(this.currentSong));
   }
 
-  updateMediaSessionMetadata(song) {
+  updateLockScreenAndMediaSession(song) {
+    if (!song) return;
+
+    // Native iOS Lock Screen & Control Center Now Playing Info
     try {
-      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator && song) {
+      if (this.player && typeof this.player.setActiveForLockScreen === 'function') {
+        this.player.setActiveForLockScreen(true, {
+          title: song.title || 'SoundVault',
+          artist: song.artist || 'Unknown Artist',
+          albumTitle: song.album || 'SoundVault',
+          artworkUrl: song.coverUri || undefined,
+        });
+      }
+    } catch (e) {
+      // Abaikan di platform web jika tidak didukung
+    }
+
+    // Web MediaSession API
+    try {
+      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
         // eslint-disable-next-line no-undef
         if (typeof MediaMetadata !== 'undefined') {
           // eslint-disable-next-line no-undef
           navigator.mediaSession.metadata = new MediaMetadata({
             title: song.title || 'SoundVault',
             artist: song.artist || 'Unknown Artist',
-            album: song.album || 'SoundVault Offline',
+            album: song.album || 'SoundVault',
             artwork: song.coverUri ? [{ src: song.coverUri }] : [],
           });
         }
@@ -88,7 +104,7 @@ class AudioService {
         navigator.mediaSession.setActionHandler('nexttrack', () => this.nextSong());
       }
     } catch (e) {
-      // Abaikan jika platform tidak mengekspos navigator.mediaSession
+      // Abaikan
     }
   }
 
@@ -115,6 +131,26 @@ class AudioService {
     await this.playSong(songs[startIdx], songs, startIdx);
   }
 
+  cleanupCurrentPlayer() {
+    if (this.statusSubscription) {
+      try {
+        this.statusSubscription.remove();
+      } catch (e) {
+        // Abaikan
+      }
+      this.statusSubscription = null;
+    }
+    if (this.player) {
+      try {
+        this.player.pause();
+        this.player.remove();
+      } catch (e) {
+        // Abaikan
+      }
+      this.player = null;
+    }
+  }
+
   async playSong(song, queue = null, index = -1) {
     await this.init();
 
@@ -124,26 +160,37 @@ class AudioService {
     }
 
     try {
-      if (this.sound) {
-        await this.sound.unloadAsync();
-        this.sound = null;
-      }
+      this.cleanupCurrentPlayer();
 
-      const { sound } = await Audio.Sound.createAsync(
+      const player = createAudioPlayer(
         { uri: song.uri },
         {
-          shouldPlay: true,
-          rate: this.playbackRate,
-          shouldCorrectPitch: true,
-          progressUpdateIntervalMillis: 300,
-        },
+          updateInterval: 250,
+          keepAudioSessionActive: true,
+        }
+      );
+
+      this.player = player;
+      this.currentSong = song;
+
+      this.statusSubscription = player.addListener(
+        'playbackStatusUpdate',
         this.onPlaybackStatusUpdate.bind(this)
       );
 
-      this.sound = sound;
-      this.currentSong = song;
+      try {
+        player.shouldCorrectPitch = true;
+        if (this.playbackRate !== 1.0) {
+          player.setPlaybackRate(this.playbackRate);
+        }
+      } catch (e) {
+        // Abaikan
+      }
+
+      this.updateLockScreenAndMediaSession(song);
+      player.play();
+
       this.isPlaying = true;
-      this.updateMediaSessionMetadata(song);
       this.notifySongChange();
       this.notifyStatus();
     } catch (error) {
@@ -154,17 +201,14 @@ class AudioService {
   }
 
   onPlaybackStatusUpdate(status) {
-    if (!status.isLoaded) {
-      if (status.error) {
-        console.error(`Playback Error: ${status.error}`);
-      }
-      return;
-    }
+    if (!status) return;
 
-    this.position = status.positionMillis || 0;
-    this.duration = status.durationMillis || 0;
-    this.isPlaying = status.isPlaying;
-    this.isBuffering = status.isBuffering;
+    this.position = Math.max(0, (status.currentTime || 0) * 1000);
+    if (status.duration && status.duration > 0) {
+      this.duration = status.duration * 1000;
+    }
+    this.isPlaying = Boolean(status.playing);
+    this.isBuffering = Boolean(status.isBuffering);
 
     if (status.didJustFinish) {
       this.handleSongFinished();
@@ -176,8 +220,15 @@ class AudioService {
 
   async handleSongFinished() {
     if (this.repeatMode === 'one') {
-      if (this.sound) {
-        await this.sound.replayAsync();
+      if (this.player) {
+        try {
+          await this.player.seekTo(0);
+          this.player.play();
+        } catch (e) {
+          if (this.currentSong) {
+            await this.playSong(this.currentSong);
+          }
+        }
       }
     } else {
       await this.nextSong(false);
@@ -185,7 +236,7 @@ class AudioService {
   }
 
   async togglePlayPause() {
-    if (!this.sound) {
+    if (!this.player) {
       if (this.currentSong) {
         await this.playSong(this.currentSong);
       } else if (this.queue.length > 0) {
@@ -195,27 +246,29 @@ class AudioService {
     }
 
     if (this.isPlaying) {
-      await this.sound.pauseAsync();
+      this.player.pause();
       this.isPlaying = false;
     } else {
-      await this.sound.playAsync();
+      this.player.play();
       this.isPlaying = true;
     }
     this.notifyStatus();
   }
 
   async pause() {
-    if (this.sound && this.isPlaying) {
-      await this.sound.pauseAsync();
+    if (this.player && this.isPlaying) {
+      this.player.pause();
       this.isPlaying = false;
       this.notifyStatus();
     }
   }
 
   async seekTo(positionMillis) {
-    if (!this.sound) return;
+    if (!this.player) return;
     try {
-      await this.sound.setPositionAsync(positionMillis);
+      await this.player.seekTo(Math.max(0, positionMillis / 1000));
+      this.position = positionMillis;
+      this.notifyStatus();
     } catch (error) {
       console.error('Error saat seek:', error);
     }
@@ -249,7 +302,7 @@ class AudioService {
   async previousSong() {
     if (this.queue.length === 0) return;
 
-    if (this.position > 3000 && this.sound) {
+    if (this.position > 3000 && this.player) {
       await this.seekTo(0);
       return;
     }
@@ -284,9 +337,10 @@ class AudioService {
 
   async setPlaybackRate(rate) {
     this.playbackRate = rate;
-    if (this.sound) {
+    if (this.player) {
       try {
-        await this.sound.setRateAsync(rate, true);
+        this.player.shouldCorrectPitch = true;
+        this.player.setPlaybackRate(rate);
       } catch (e) {
         console.error('Gagal mengubah kecepatan lagu:', e);
       }
