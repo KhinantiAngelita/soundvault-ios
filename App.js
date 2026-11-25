@@ -42,6 +42,7 @@ import MiniPlayer from './src/components/MiniPlayer';
 import PlayerModal from './src/components/PlayerModal';
 import RenameModal from './src/components/RenameModal';
 import SettingsModal from './src/components/SettingsModal';
+import SplashScreen from './src/components/SplashScreen';
 
 export default function App() {
   const [themeMode, setThemeMode] = useState('dark');
@@ -59,6 +60,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
 
   // Player State
   const [playerStatus, setPlayerStatus] = useState({
@@ -850,6 +852,15 @@ export default function App() {
           />
         </View>
       </SafeAreaView>
+
+      {/* Animated Splash Screen Elegan Edge-to-Edge pada Awal Buka Aplikasi */}
+      {showSplash && (
+        <SplashScreen
+          visible={showSplash}
+          theme={theme}
+          onFinish={() => setShowSplash(false)}
+        />
+      )}
     </SafeAreaProvider>
   );
 }

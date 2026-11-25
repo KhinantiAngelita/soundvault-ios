@@ -207,7 +207,8 @@ export default function SplashScreen({ visible, theme, onFinish }) {
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 999,
+    zIndex: 9999,
+    elevation: 99,
     justifyContent: 'center',
     alignItems: 'center',
   },
